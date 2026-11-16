@@ -44,6 +44,9 @@
 #define NGX_HTTP_COMPRESSION_MULTI_STATUS         207
 #define NGX_HTTP_COMPRESSION_NOT_ACCEPTABLE       406
 
+#define NGX_HTTP_COMPRESSION_ZSTD_CACHE_SIZE      4
+#define NGX_HTTP_COMPRESSION_ZSTD_CACHE_MAX       (16 * 1024 * 1024)
+
 
 typedef struct {
     ngx_uint_t  nelts;
@@ -234,6 +237,7 @@ static ngx_int_t ngx_http_compression_zstd_init(
 static ngx_int_t ngx_http_compression_zstd_process(
     ngx_http_compression_ctx_t *ctx);
 static void ngx_http_compression_zstd_close(ngx_http_compression_ctx_t *ctx);
+static void ngx_http_compression_zstd_exit_process(ngx_cycle_t *cycle);
 #endif
 
 static ngx_int_t ngx_http_compression_ratio_variable(ngx_http_request_t *r,
@@ -577,7 +581,11 @@ ngx_module_t  ngx_http_compression_filter_module = {
     NULL,                                    /* init process */
     NULL,                                    /* init thread */
     NULL,                                    /* exit thread */
+#if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
+    ngx_http_compression_zstd_exit_process,  /* exit process */
+#else
     NULL,                                    /* exit process */
+#endif
     NULL,                                    /* exit master */
     NGX_MODULE_V1_PADDING
 };
@@ -658,6 +666,16 @@ static const ngx_http_compression_encoder_t
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 static u_char                           ngx_http_compression_empty;
+
+#if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
+
+static ZSTD_CCtx
+    *ngx_http_compression_zstd_cache[NGX_HTTP_COMPRESSION_ZSTD_CACHE_SIZE];
+
+static size_t      ngx_http_compression_zstd_cached_bytes;
+static ngx_uint_t  ngx_http_compression_zstd_cached;
+
+#endif
 
 
 static ngx_int_t
@@ -1898,12 +1916,30 @@ static ngx_int_t
 ngx_http_compression_zstd_init(ngx_http_compression_ctx_t *ctx)
 {
     size_t                            rc;
+    ngx_uint_t                        n;
     ngx_http_compression_zstd_ctx_t  *zctx;
 
     zctx = (ngx_http_compression_zstd_ctx_t *) ctx;
 
-    zctx->state = ZSTD_createCCtx();
-    if (zctx->state == NULL) {
+    if (ngx_http_compression_zstd_cached) {
+        n = --ngx_http_compression_zstd_cached;
+        zctx->state = ngx_http_compression_zstd_cache[n];
+        ngx_http_compression_zstd_cached_bytes -= ZSTD_sizeof_CCtx(zctx->state);
+
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ctx->request->connection->log, 0,
+                       "compression zstd context reused");
+
+    } else {
+        zctx->state = ZSTD_createCCtx();
+        if (zctx->state == NULL) {
+            return NGX_ERROR;
+        }
+    }
+
+    rc = ZSTD_CCtx_reset(zctx->state, ZSTD_reset_session_and_parameters);
+    if (ZSTD_isError(rc)) {
+        ngx_log_error(NGX_LOG_ALERT, ctx->request->connection->log, 0,
+                      "ZSTD_CCtx_reset() failed: %s", ZSTD_getErrorName(rc));
         return NGX_ERROR;
     }
 
@@ -1911,7 +1947,7 @@ ngx_http_compression_zstd_init(ngx_http_compression_ctx_t *ctx)
                                 (int) ctx->level);
     if (ZSTD_isError(rc)) {
         ngx_log_error(NGX_LOG_ALERT, ctx->request->connection->log, 0,
-                      "ZSTD_CCtx_setParameter() failed: %s",
+                      "ZSTD_CCtx_setParameter(compressionLevel) failed: %s",
                       ZSTD_getErrorName(rc));
         return NGX_ERROR;
     }
@@ -1996,14 +2032,53 @@ ngx_http_compression_zstd_process(ngx_http_compression_ctx_t *ctx)
 static void
 ngx_http_compression_zstd_close(ngx_http_compression_ctx_t *ctx)
 {
+    size_t                            size;
+    ngx_uint_t                        n;
     ngx_http_compression_zstd_ctx_t  *zctx;
 
     zctx = (ngx_http_compression_zstd_ctx_t *) ctx;
 
-    if (zctx->state) {
-        ZSTD_freeCCtx(zctx->state);
-        zctx->state = NULL;
+    if (zctx->state == NULL) {
+        return;
     }
+
+    size = ZSTD_sizeof_CCtx(zctx->state);
+
+    if (ctx->success
+        && ngx_http_compression_zstd_cached
+           < NGX_HTTP_COMPRESSION_ZSTD_CACHE_SIZE
+        && size <= NGX_HTTP_COMPRESSION_ZSTD_CACHE_MAX
+                   - ngx_http_compression_zstd_cached_bytes)
+    {
+        n = ngx_http_compression_zstd_cached++;
+        ngx_http_compression_zstd_cache[n] = zctx->state;
+        ngx_http_compression_zstd_cached_bytes += size;
+
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ctx->request->connection->log, 0,
+                       "compression zstd context cached: %uz", size);
+
+    } else {
+        ZSTD_freeCCtx(zctx->state);
+
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ctx->request->connection->log, 0,
+                       "compression zstd context freed: %uz", size);
+    }
+
+    zctx->state = NULL;
+}
+
+
+static void
+ngx_http_compression_zstd_exit_process(ngx_cycle_t *cycle)
+{
+    ngx_uint_t  n;
+
+    while (ngx_http_compression_zstd_cached) {
+        n = --ngx_http_compression_zstd_cached;
+        ZSTD_freeCCtx(ngx_http_compression_zstd_cache[n]);
+    }
+
+    ngx_http_compression_zstd_cached_bytes = 0;
 }
 
 #endif

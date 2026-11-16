@@ -120,6 +120,9 @@ if ($ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE}) {
 
 $t->stop();
 my $log = $t->read_file('error.log');
+like($log, qr/compression zstd context reused/, 'completed contexts are reused');
+like($log, qr/compression zstd context freed: \d{8,}/,
+    'large workspaces are not retained');
 unlike($log, qr/\[(?:alert|emerg)\]|Sanitizer|runtime error:/,
     'no zstd lifecycle errors');
 undef $t;
