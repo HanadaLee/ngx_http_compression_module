@@ -83,7 +83,7 @@ compression on;
 **Default:** `compression off;`  
 **Context:** `http`, `server`, `location`, `when`
 
-Enables compression for responses with status 200, 403, or 404.
+Enables compression for responses with status 200, 403, or 404. Responses containing `Cache-Control: no-transform` are not compressed.
 
 ### compression_encodings
 

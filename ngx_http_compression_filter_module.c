@@ -188,6 +188,7 @@ static ngx_int_t ngx_http_compression_header_filter(ngx_http_request_t *r);
 static ngx_int_t ngx_http_compression_body_filter(ngx_http_request_t *r,
     ngx_chain_t *in);
 static ngx_int_t ngx_http_compression_ok(ngx_http_request_t *r);
+static ngx_int_t ngx_http_compression_cache_control(ngx_http_request_t *r);
 static ngx_int_t ngx_http_compression_select(ngx_http_request_t *r,
     ngx_http_compression_encodings_t *encodings, ngx_flag_t ignore);
 static ngx_int_t ngx_http_compression_qvalue(u_char *p, u_char *last);
@@ -988,6 +989,10 @@ ngx_http_compression_ok(ngx_http_request_t *r)
     static ngx_str_t  no_store = ngx_string("no-store");
     static ngx_str_t  private = ngx_string("private");
 
+    if (ngx_http_compression_cache_control(r) != NGX_OK) {
+        return NGX_DECLINED;
+    }
+
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
     if (r->http_version < clcf->gzip_http_version
@@ -1097,6 +1102,83 @@ ok:
     }
 
 #endif
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_compression_cache_control(ngx_http_request_t *r)
+{
+    u_char           *p, *last, *start;
+    ngx_uint_t        i, quoted;
+    ngx_list_part_t  *part;
+    ngx_table_elt_t  *h;
+
+    part = &r->headers_out.headers.part;
+    h = part->elts;
+
+    for (i = 0; /* void */; i++) {
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            h = part->elts;
+            i = 0;
+        }
+
+        if (h[i].hash == 0
+            || h[i].key.len != sizeof("Cache-Control") - 1
+            || ngx_strncasecmp(h[i].key.data, (u_char *) "Cache-Control",
+                               sizeof("Cache-Control") - 1) != 0)
+        {
+            continue;
+        }
+
+        p = h[i].value.data;
+        last = p + h[i].value.len;
+
+        while (p < last) {
+            while (p < last && (*p == ' ' || *p == '\t' || *p == ',')) {
+                p++;
+            }
+
+            start = p;
+
+            while (p < last && *p != ' ' && *p != '\t'
+                   && *p != ',' && *p != '=')
+            {
+                p++;
+            }
+
+            if (p - start == sizeof("no-transform") - 1
+                && ngx_strncasecmp(start, (u_char *) "no-transform",
+                                   sizeof("no-transform") - 1) == 0)
+            {
+                return NGX_DECLINED;
+            }
+
+            quoted = 0;
+
+            while (p < last) {
+                if (*p == ',' && !quoted) {
+                    p++;
+                    break;
+                }
+
+                if (*p == '"') {
+                    quoted = !quoted;
+
+                } else if (*p == '\\' && quoted && p + 1 < last) {
+                    p++;
+                }
+
+                p++;
+            }
+        }
+    }
 
     return NGX_OK;
 }
