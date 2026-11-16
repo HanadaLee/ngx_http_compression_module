@@ -33,6 +33,10 @@ jobs:
           - name: nginx-dynamic-expr
             expr: 1
             link: dynamic
+          - name: nginx-dynamic-reverse
+            expr: 1
+            link: dynamic
+            order: reverse
           - name: nginx-sanitizers
             expr: 1
             link: static
@@ -139,6 +143,7 @@ jobs:
         env:
           TEST_NGINX_EXPR: ${{ matrix.expr }}
           TEST_MODULE_LINK: ${{ matrix.link }}
+          TEST_MODULE_ORDER: ${{ matrix.order || 'forward' }}
           TEST_SANITIZE: ${{ matrix.sanitize || 0 }}
           TEST_NGINX_OPENRESTY: ${{ matrix.openresty || 0 }}
           TEST_NGINX_GZIP: ${{ matrix.standalone && '0' || '1' }}

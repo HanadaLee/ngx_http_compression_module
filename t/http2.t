@@ -13,6 +13,7 @@ use Compression;
 my $t = Test::Nginx->new()->has(qw/http http_v2 /);
 my $plain = 'multiplexed compression ' x 1024;
 $t->write_file('body.txt', $plain);
+prepare_static($t, $plain);
 my $large = 'fair compression response ' x 262144;
 $t->write_file('fair.txt', $large);
 
@@ -35,6 +36,12 @@ http {
         http2 on;
         root %%TESTDIR%%;
         location / {}
+        location /precompressed/ {
+            compression off;
+            compression_static always;
+            compression_static_encodings __ENCODINGS__;
+            decompression on;
+        }
         location /ping {
             compression off;
             return 200 pong;
@@ -72,6 +79,7 @@ for my $request (@requests) {
         "$encoding HTTP/2 multiplexed round trip");
 }
 check_fairness($t, $connection, $large, 2);
+check_static($t, $connection, $plain, 2);
 undef $connection;
 $t->stop();
 like($t->read_file('error.log'), qr/compression filter yield/,

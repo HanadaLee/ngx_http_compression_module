@@ -9,8 +9,8 @@ use Test::Nginx qw/http http_content/;
 use File::Basename qw/dirname/;
 use File::Spec;
 
-our @EXPORT = qw/request decoded check_response encodings all_backends
-    write_config check_fairness/;
+our @EXPORT = qw/request decoded check_response encodings decodings all_backends
+    write_config check_fairness prepare_static check_static/;
 
 sub encodings {
     return split /\s+/, $ENV{TEST_NGINX_COMPRESSION_ENCODINGS}
@@ -19,6 +19,11 @@ sub encodings {
 
 sub all_backends {
     return scalar(encodings()) == 4;
+}
+
+sub decodings {
+    return split /\s+/, $ENV{TEST_NGINX_DECOMPRESSION_ENCODINGS}
+        // $ENV{TEST_NGINX_COMPRESSION_ENCODINGS} // 'gzip deflate br zstd';
 }
 
 sub write_config {
@@ -119,6 +124,57 @@ sub check_fairness {
             @$frames;
         is($reply->{headers}->{':status'}, 200,
             "$encoding HTTP/$version survives stream cancellation");
+    }
+}
+
+sub prepare_static {
+    my ($t, $plain) = @_;
+    my %suffix = (gzip => 'gz', br => 'br', zstd => 'zst', deflate => 'deflate');
+    my %decodings = map { $_ => 1 } decodings();
+    mkdir $t->testdir() . '/precompressed';
+    my $encoder = File::Spec->rel2abs(dirname(__FILE__) . '/encode.py');
+    for my $encoding (grep { $decodings{$_} } encodings()) {
+        $t->write_file("precompressed/$encoding.txt", $plain);
+        my $path = $t->testdir() . "/precompressed/$encoding.txt";
+        is(system('python3', '-B', $encoder, $encoding, $path,
+            "$path.$suffix{$encoding}"), 0, "$encoding protocol fixture");
+    }
+}
+
+sub check_static {
+    my ($t, $connection, $plain, $version) = @_;
+    my %decodings = map { $_ => 1 } decodings();
+    my $mode = $version == 2 ? 2 : 4;
+    my $scheme = $version == 2 ? 'http' : 'https';
+    $connection->h2_window(1024 * 1024) if $version == 2;
+    my @requests;
+    for my $encoding (grep { $decodings{$_} } encodings()) {
+        for my $accept ($encoding, 'identity') {
+            my $sid = $connection->new_stream({ headers => [
+                { name => ':method', value => 'GET', mode => $mode },
+                { name => ':scheme', value => $scheme, mode => $mode },
+                { name => ':path', value => "/precompressed/$encoding.txt", mode => $mode },
+                { name => ':authority', value => 'localhost', mode => $mode },
+                { name => 'accept-encoding', value => $accept, mode => $mode },
+            ]});
+            push @requests, [$sid, $encoding, $accept];
+        }
+    }
+    my $frames = $connection->read(all => [
+        map { { sid => $_->[0], fin => 1 } } @requests
+    ]);
+    for my $request (@requests) {
+        my ($sid, $encoding, $accept) = @$request;
+        my ($header) = grep { $_->{type} eq 'HEADERS' && $_->{sid} == $sid } @$frames;
+        my $body = join '', map { $_->{data} }
+            grep { $_->{type} eq 'DATA' && $_->{sid} == $sid } @$frames;
+        my $name = "$encoding HTTP/$version static $accept";
+        is($header->{headers}->{':status'}, 200, "$name status");
+        my $expected = $accept eq 'identity' ? undef : $encoding;
+        is($header->{headers}->{'content-encoding'}, $expected, "$name encoding");
+        my $response = "HTTP/1.1 200 OK\r\n";
+        $response .= "Content-Encoding: $encoding\r\n" if defined $expected;
+        is(decoded($t, "$response\r\n$body", $plain), $plain, "$name round trip");
     }
 }
 

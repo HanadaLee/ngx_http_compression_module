@@ -13,6 +13,7 @@ use Compression;
 my $t = Test::Nginx->new()->has(qw/http http_v3 cryptx/);
 my $plain = 'multiplexed compression ' x 1024;
 $t->write_file('body.txt', $plain);
+prepare_static($t, $plain);
 my $large = 'fair compression response ' x 262144;
 $t->write_file('fair.txt', $large);
 my $pid = fork();
@@ -50,6 +51,12 @@ http {
         ssl_protocols TLSv1.3;
         root %%TESTDIR%%;
         location / {}
+        location /precompressed/ {
+            compression off;
+            compression_static always;
+            compression_static_encodings __ENCODINGS__;
+            decompression on;
+        }
         location /ping {
             compression off;
             return 200 pong;
@@ -87,6 +94,7 @@ for my $request (@requests) {
         "$encoding HTTP/3 multiplexed round trip");
 }
 check_fairness($t, $connection, $large, 3);
+check_static($t, $connection, $plain, 3);
 undef $connection;
 $t->stop();
 like($t->read_file('error.log'), qr/compression filter yield/,

@@ -104,6 +104,15 @@ fi
 encodings+=(gzip deflate)
 export TEST_NGINX_COMPRESSION_ENCODINGS="${encodings[*]}"
 
+decodings=(gzip deflate)
+if grep -Eq '^#define NGX_HTTP_COMPRESSION_HAVE_BROTLI_DECODER[[:space:]]+1$' "$auto_config"; then
+    decodings+=(br)
+fi
+if grep -Eq '^#define NGX_HTTP_COMPRESSION_HAVE_ZSTD_DECODER[[:space:]]+1$' "$auto_config"; then
+    decodings+=(zstd)
+fi
+export TEST_NGINX_DECOMPRESSION_ENCODINGS="${decodings[*]}"
+
 export TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE=0
 if grep -Eq '^#define NGX_HTTP_COMPRESSION_HAVE_ZSTD_TARGET_BLOCK_SIZE[[:space:]]+1$' "$auto_config"; then
     export TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE=1
@@ -115,7 +124,14 @@ if [[ $(id -u) == 0 ]]; then
     export TEST_NGINX_GLOBALS="${TEST_NGINX_GLOBALS:-} user root;"
 fi
 if [[ ${TEST_MODULE_LINK:-static} == dynamic ]]; then
-    export TEST_NGINX_GLOBALS="${TEST_NGINX_GLOBALS:-} load_module $source_root/objs/ngx_http_compression_filter_module.so;"
+    export TEST_NGINX_MODULE_DIR="$source_root/objs"
+    modules=(compression_filter compression_static )
+    if [[ ${TEST_MODULE_ORDER:-forward} == reverse ]]; then
+        modules=(compression_static compression_filter)
+    fi
+    for module in "${modules[@]}"; do
+        export TEST_NGINX_GLOBALS="${TEST_NGINX_GLOBALS:-} load_module $source_root/objs/ngx_http_${module}_module.so;"
+    done
 fi
 cd "$module_root"
 prove -v t/*.t 2>&1 | tee "$output_root/tests.log"

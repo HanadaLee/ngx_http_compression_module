@@ -4,8 +4,9 @@ ngx_addon_name=ngx_http_compression_module
 
 ngx_compression_incs=
 ngx_compression_libs=
+ngx_decompression_libs=
 
-for ngx_compression_library in zlib brotli zstd
+for ngx_compression_library in zlib brotli brotli_decoder zstd zstd_decoder
 do
     ngx_feature_run=no
     ngx_feature_path=
@@ -33,6 +34,32 @@ do
 
                               state = BrotliEncoderCreateInstance(0, 0, 0);
                               BrotliEncoderDestroyInstance(state);"
+            ;;
+
+        brotli_decoder)
+            ngx_compression_package=libbrotlidec
+            ngx_feature="Brotli decompression library"
+            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_BROTLI_DECODER
+            ngx_feature_incs="#include <brotli/decode.h>"
+            ngx_feature_libs="-lbrotlidec -lbrotlicommon"
+            ngx_feature_test="BrotliDecoderState  *state;
+
+                              state = BrotliDecoderCreateInstance(0, 0, 0);
+                              BrotliDecoderDestroyInstance(state);"
+            ;;
+
+        zstd_decoder)
+            ngx_compression_package=libzstd
+            ngx_feature="Zstd decompression library"
+            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_ZSTD_DECODER
+            ngx_feature_incs="#include <zstd.h>"
+            ngx_feature_libs="-lzstd"
+            ngx_feature_test="ZSTD_DCtx  *state;
+
+                              state = ZSTD_createDCtx();
+                              ZSTD_DCtx_setParameter(state,
+                                                    ZSTD_d_windowLogMax, 27);
+                              ZSTD_freeDCtx(state);"
             ;;
 
         zstd)
@@ -63,7 +90,18 @@ do
 
     if [ "$ngx_found" = yes ]; then
         ngx_compression_incs="$ngx_compression_incs $ngx_feature_path"
-        ngx_compression_libs="$ngx_compression_libs $ngx_feature_libs"
+        case $ngx_compression_library in
+            zlib)
+                ngx_compression_libs="$ngx_compression_libs $ngx_feature_libs"
+                ngx_decompression_libs="$ngx_decompression_libs $ngx_feature_libs"
+                ;;
+            *_decoder)
+                ngx_decompression_libs="$ngx_decompression_libs $ngx_feature_libs"
+                ;;
+            *)
+                ngx_compression_libs="$ngx_compression_libs $ngx_feature_libs"
+                ;;
+        esac
 
         if [ "$ngx_compression_library" = zstd ]; then
             ngx_feature="zstd target compressed block size"
@@ -89,15 +127,7 @@ done
 have=NGX_HTTP_COMPRESSION . auto/have
 have=NGX_HTTP_GZIP . auto/have
 
-ngx_module_type=HTTP_FILTER
-ngx_module_name=ngx_http_compression_filter_module
-ngx_module_incs="$ngx_addon_dir $ngx_compression_incs"
-ngx_module_deps="$ngx_addon_dir/ngx_http_compression.h"
-ngx_module_srcs="$ngx_addon_dir/ngx_http_compression_filter_module.c \
-                 $ngx_addon_dir/ngx_http_compression.c"
-ngx_module_libs="$ngx_compression_libs"
-ngx_module_order="$ngx_module_name \
-                  ngx_http_postpone_filter_module \
+ngx_compression_filter_order="ngx_http_postpone_filter_module \
                   ngx_http_ssi_filter_module \
                   ngx_http_charset_filter_module \
                   ngx_http_xslt_filter_module \
@@ -112,16 +142,57 @@ ngx_module_order="$ngx_module_name \
                   ngx_http_not_modified_filter_module \
                   ngx_http_slice_filter_module"
 
-. auto/module
+for ngx_compression_module in filter static
+do
+    ngx_module_type=HTTP_FILTER
+    ngx_module_incs="$ngx_addon_dir $ngx_compression_incs"
+    ngx_module_deps="$ngx_addon_dir/ngx_http_compression.h"
 
-if [ "$ngx_module_link" != DYNAMIC ]; then
-    if [ "$HTTP_GZIP" = YES ]; then
-        ngx_compression_after=ngx_http_gzip_filter_module
-    else
-        ngx_compression_after=ngx_http_range_header_filter_module
+    case $ngx_compression_module in
+        filter)
+            ngx_module_name=ngx_http_compression_filter_module
+            ngx_module_libs="$ngx_compression_libs"
+            ngx_module_order="$ngx_module_name $ngx_compression_filter_order"
+            ngx_compression_anchor=ngx_http_gzip_filter_module
+            ngx_compression_fallback=ngx_http_range_header_filter_module
+            ;;
+
+        static)
+            ngx_module_type=HTTP
+            ngx_module_name=ngx_http_compression_static_module
+            ngx_module_libs=
+            ngx_module_order="$ngx_module_name \
+                              ngx_http_dav_module \
+                              ngx_http_autoindex_module \
+                              ngx_http_index_module \
+                              ngx_http_random_index_module \
+                              ngx_http_access_module \
+                              ngx_http_realip_module \
+                              ngx_http_write_filter_module"
+            ngx_compression_anchor=ngx_http_gzip_static_module
+            ngx_compression_fallback=ngx_http_static_module
+            ;;
+
+    esac
+
+    ngx_module_srcs="$ngx_addon_dir/$ngx_module_name.c \
+                     $ngx_addon_dir/ngx_http_compression.c"
+
+    . auto/module
+
+    if [ "$ngx_module_link" != DYNAMIC ]; then
+        eval ngx_compression_modules="\$${ngx_module_type}_MODULES"
+        ngx_compression_modules=$(echo "$ngx_compression_modules" \
+            | sed "s/ $ngx_module_name//")
+
+        case " $ngx_compression_modules " in
+            *" $ngx_compression_anchor "*) ;;
+            *) ngx_compression_anchor=$ngx_compression_fallback ;;
+        esac
+
+
+        ngx_compression_modules=$(echo "$ngx_compression_modules" \
+            | sed "s/$ngx_compression_anchor/$ngx_compression_anchor $ngx_module_name/")
+        eval ${ngx_module_type}_MODULES=\"\$ngx_compression_modules\"
     fi
-
-    HTTP_FILTER_MODULES=$(echo "$HTTP_FILTER_MODULES" \
-        | sed "s/ $ngx_module_name//" \
-        | sed "s/$ngx_compression_after/$ngx_compression_after $ngx_module_name/")
-fi
+done

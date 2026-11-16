@@ -6,7 +6,7 @@ for argument do
     library=
     case "$argument" in
         -lz) library=zlib ;;
-        -lbrotlienc|-lbrotlicommon) library=brotli ;;
+        -lbrotlienc|-lbrotlidec|-lbrotlicommon) library=brotli ;;
         -lzstd) library=zstd ;;
     esac
 
