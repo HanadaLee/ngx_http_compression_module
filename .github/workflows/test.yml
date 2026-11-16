@@ -1,0 +1,162 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.repository == 'HanadaLee/ngx_http_compression_filter_module'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: nginx-static
+            expr: 0
+            link: static
+          - name: nginx-static-expr
+            expr: 1
+            link: static
+          - name: nginx-dynamic
+            expr: 0
+            link: dynamic
+          - name: nginx-dynamic-expr
+            expr: 1
+            link: dynamic
+          - name: nginx-sanitizers
+            expr: 1
+            link: static
+            sanitize: 1
+          - name: openresty
+            expr: 1
+            link: static
+            openresty: 1
+          - name: nginx-zlib
+            libraries: zlib
+            standalone: 1
+            expr: 1
+            link: static
+          - name: nginx-brotli
+            libraries: brotli
+            standalone: 1
+            expr: 1
+            link: static
+          - name: nginx-zstd
+            libraries: zstd
+            standalone: 1
+            expr: 0
+            link: static
+          - name: nginx-zlib-brotli
+            libraries: zlib brotli
+            standalone: 1
+            expr: 0
+            link: static
+          - name: nginx-zlib-zstd
+            libraries: zlib zstd
+            standalone: 1
+            expr: 1
+            link: static
+          - name: nginx-brotli-zstd
+            libraries: brotli zstd
+            standalone: 1
+            expr: 0
+            link: static
+          - name: nginx-standalone
+            libraries: zlib brotli zstd
+            standalone: 1
+            expr: 1
+            link: static
+          - name: nginx-standalone-dynamic
+            libraries: brotli
+            standalone: 1
+            expr: 1
+            link: dynamic
+          - name: nginx-no-libraries
+            libraries: none
+            standalone: 1
+            expr: 0
+            link: static
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libpcre2-dev \
+            libssl-dev zlib1g-dev libbrotli-dev libzstd-dev perl \
+            libio-socket-ssl-perl libio-compress-perl libcryptx-perl python3
+      - uses: actions/checkout@v6
+        if: matrix.openresty != 1
+        with:
+          repository: nginx/nginx
+          ref: release-1.31.8
+          path: .ci/nginx
+      - uses: actions/checkout@v6
+        if: matrix.openresty == 1
+        with:
+          repository: facebook/zstd
+          ref: v1.5.7
+          path: .ci/zstd
+      - name: Build Zstd with target block support
+        if: matrix.openresty == 1
+        run: |
+          make -C .ci/zstd/lib -j2
+          make -C .ci/zstd/lib PREFIX="$RUNNER_TEMP/zstd" install
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/zstd/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/zstd/lib" >> "$GITHUB_ENV"
+      - name: Download OpenResty
+        if: matrix.openresty == 1
+        run: |
+          curl --fail --location --retry 3 \
+            https://openresty.org/download/openresty-1.31.8.1.tar.gz \
+            --output /tmp/openresty.tar.gz
+          mkdir -p .ci/nginx
+          tar -xzf /tmp/openresty.tar.gz --strip-components=1 -C .ci/nginx
+      - uses: actions/checkout@v6
+        with:
+          repository: nginx/nginx-tests
+          ref: c0b7894063022fb86d5b5ad732c08507ea03aa78
+          path: .ci/nginx-tests
+      - uses: actions/checkout@v6
+        if: matrix.expr == 1
+        with:
+          repository: HanadaLee/ngx_expr_module
+          ref: 1.0.2
+          path: .ci/ngx_expr_module
+      - uses: actions/checkout@v6
+        if: matrix.standalone != 1
+        with:
+          repository: HanadaLee/ngx_http_compression_normalize_module
+          ref: 1.0.0
+          path: .ci/normalize
+      - uses: actions/checkout@v6
+        if: matrix.standalone != 1
+        with:
+          repository: HanadaLee/ngx_http_compression_vary_filter_module
+          ref: 1.0.0
+          path: .ci/vary
+      - name: Build and test
+        env:
+          TEST_NGINX_EXPR: ${{ matrix.expr }}
+          TEST_MODULE_LINK: ${{ matrix.link }}
+          TEST_SANITIZE: ${{ matrix.sanitize || 0 }}
+          TEST_NGINX_OPENRESTY: ${{ matrix.openresty || 0 }}
+          TEST_NGINX_GZIP: ${{ matrix.standalone && '0' || '1' }}
+          TEST_COMPRESSION_LIBRARIES: ${{ matrix.libraries || '' }}
+        run: bash util/run-tests.sh
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: ${{ matrix.name }}-logs
+          path: .ci/test-output/
+          include-hidden-files: true

@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# nginx uses unaligned wire-format access on supported architectures, and its
+# string formatter permits a null source for a zero-length copy. Keep these
+# exclusions in the affected core files; instrument the addon without them.
+exclude=
+for argument do
+    case "$argument" in
+        src/core/ngx_string.c)
+            exclude=-fno-sanitize=nonnull-attribute
+            ;;
+        src/http/v2/ngx_http_v2.c|src/http/v2/ngx_http_v2_filter_module.c|\
+        src/http/ngx_http_huff_encode.c|\
+        src/event/quic/ngx_event_quic_transport.c)
+            exclude=-fno-sanitize=alignment
+            ;;
+    esac
+done
+
+exec "${CC:-cc}" "$@" $exclude

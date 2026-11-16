@@ -309,7 +309,9 @@ prove -v t/*.t
 
 Set `TEST_NGINX_EXPR=1` for conditional configuration tests, `TEST_NGINX_COMPRESSION_AUX=1` when normalize and vary are compiled, and `TEST_NGINX_OPENRESTY=1` for Lua response tests.
 
-For a partial build tested directly with `prove`, set `TEST_NGINX_COMPRESSION_ENCODINGS` to its available encodings, separated by spaces, and `TEST_NGINX_GZIP=0` when the native gzip modules are absent. Set `TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE=1` when the target block size directive is available.
+For a partial build tested directly with `prove`, set `TEST_NGINX_COMPRESSION_ENCODINGS` to its available encodings, separated by spaces, and `TEST_NGINX_GZIP=0` when the native gzip modules are absent. Set `TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE=1` when the target block size directive is available. The build runner sets these automatically.
+
+`util/run-tests.sh` builds nginx and runs the suite using sources under `.ci/`. The workflow covers static and dynamic builds, optional expr support, library combinations without the native gzip modules, and sanitizers. Library combinations use a compiler wrapper to make excluded libraries fail the normal configuration and link checks. Sanitizer compiler exclusions are restricted to nginx core's unaligned wire-format operations and zero-length string copies; the compression module is fully instrumented.
 
 ## License
 
