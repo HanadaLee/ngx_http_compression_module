@@ -235,6 +235,14 @@ Sets the Brotli window size, a power of two from `1k` to `16m`.
 
 Sets the Zstd compression level. The range is determined by libzstd; negative levels are supported and `0` is excluded.
 
+### compression_zstd_window
+
+**Syntax:** `compression_zstd_window size;`  
+**Default:** `compression_zstd_window 512k;`  
+**Context:** `http`, `server`, `location`
+
+Sets the Zstd window size, a power of two from `1k` to `8m`.
+
 ### compression_deflate_level
 
 **Syntax:** `compression_deflate_level level;`  

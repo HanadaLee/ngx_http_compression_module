@@ -104,6 +104,8 @@ typedef struct {
 #else
     ngx_int_t                              zstd_level;
 #endif
+
+    size_t                                 zstd_window;
 #endif
 } ngx_http_compression_conf_t;
 
@@ -239,11 +241,8 @@ static char *ngx_http_compression_encodings(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 static char *ngx_http_compression_level(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
-
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB || NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 static char *ngx_http_compression_size(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
-#endif
 
 static void *ngx_http_compression_create_conf(ngx_conf_t *cf);
 static char *ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent,
@@ -518,6 +517,13 @@ static ngx_command_t  ngx_http_compression_commands[] = {
       ngx_http_compression_level,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_compression_conf_t, zstd_level),
+      NULL },
+
+    { ngx_string("compression_zstd_window"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_compression_size,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_compression_conf_t, zstd_window),
       NULL },
 
 #endif
@@ -1890,6 +1896,15 @@ ngx_http_compression_zstd_init(ngx_http_compression_ctx_t *ctx)
         return NGX_ERROR;
     }
 
+    rc = ZSTD_CCtx_setParameter(zctx->state, ZSTD_c_windowLog,
+                                (int) ctx->conf->zstd_window);
+    if (ZSTD_isError(rc)) {
+        ngx_log_error(NGX_LOG_ALERT, ctx->request->connection->log, 0,
+                      "ZSTD_CCtx_setParameter(windowLog) failed: %s",
+                      ZSTD_getErrorName(rc));
+        return NGX_ERROR;
+    }
+
     return NGX_OK;
 }
 
@@ -2219,7 +2234,6 @@ ngx_http_compression_level(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 }
 
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB || NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 static char *
 ngx_http_compression_size(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
@@ -2256,6 +2270,14 @@ ngx_http_compression_size(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #endif
 
+#if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
+    if (cmd->offset == offsetof(ngx_http_compression_conf_t, zstd_window)) {
+        min = 1024;
+        max = 8 * 1024 * 1024;
+    }
+
+#endif
+
     if (size < min || size > max || (size & (size - 1))) {
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                            "\"%V\" must be a power of two between %uz and %uz",
@@ -2275,8 +2297,6 @@ ngx_http_compression_size(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     return NGX_CONF_OK;
 }
-
-#endif
 
 
 static void *
@@ -2343,6 +2363,11 @@ ngx_http_compression_create_conf(ngx_conf_t *cf)
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     conf->brotli_window = NGX_CONF_UNSET_SIZE;
+#endif
+
+#if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
+    conf->zstd_window = NGX_CONF_UNSET_SIZE;
+
 #endif
 
     return conf;
@@ -2473,6 +2498,11 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     ngx_conf_merge_size_value(conf->brotli_window, prev->brotli_window, 19);
+#endif
+
+#if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
+    ngx_conf_merge_size_value(conf->zstd_window, prev->zstd_window, 19);
+
 #endif
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,

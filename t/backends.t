@@ -23,6 +23,7 @@ my @directives = (
     ['br', 'compression_brotli_level 6;'],
     ['br', 'compression_brotli_window 512k;'],
     ['zstd', 'compression_zstd_level 1;'],
+    ['zstd', 'compression_zstd_window 512k;'],
 );
 
 for my $encoding (qw/gzip br zstd deflate/) {
