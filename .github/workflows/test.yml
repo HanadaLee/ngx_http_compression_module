@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   test:
-    if: github.repository == 'HanadaLee/ngx_http_compression_filter_module'
+    if: github.repository == 'HanadaLee/ngx_http_compression_module'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:

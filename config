@@ -1,6 +1,6 @@
 # Copyright (C) Hanada
 
-ngx_addon_name=ngx_http_compression_filter_module
+ngx_addon_name=ngx_http_compression_module
 
 ngx_compression_incs=
 ngx_compression_libs=
@@ -78,7 +78,7 @@ do
     elif [ "$ngx_compression_library" = zlib ]; then
         cat << END
 
-$0: error: ngx_http_compression_filter_module requires the zlib library.
+$0: error: ngx_http_compression_module requires the zlib library.
 Set PKG_CONFIG_PATH for a custom installation.
 
 END
@@ -91,9 +91,10 @@ have=NGX_HTTP_GZIP . auto/have
 
 ngx_module_type=HTTP_FILTER
 ngx_module_name=ngx_http_compression_filter_module
-ngx_module_incs="$ngx_compression_incs"
-ngx_module_deps=
-ngx_module_srcs="$ngx_addon_dir/ngx_http_compression_filter_module.c"
+ngx_module_incs="$ngx_addon_dir $ngx_compression_incs"
+ngx_module_deps="$ngx_addon_dir/ngx_http_compression.h"
+ngx_module_srcs="$ngx_addon_dir/ngx_http_compression_filter_module.c \
+                 $ngx_addon_dir/ngx_http_compression.c"
 ngx_module_libs="$ngx_compression_libs"
 ngx_module_order="$ngx_module_name \
                   ngx_http_postpone_filter_module \

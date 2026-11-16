@@ -76,7 +76,7 @@ fi
 if [[ -n ${TEST_COMPRESSION_LIBRARIES:-}
       && " $TEST_COMPRESSION_LIBRARIES " != *" zlib "* ]]; then
     [[ $configured == 0 ]]
-    grep -q 'ngx_http_compression_filter_module requires the zlib library' \
+    grep -q 'ngx_http_compression_module requires the zlib library' \
         "$output_root/configure.log"
     echo 'PASS: configure rejects a build without zlib'
     exit 0
