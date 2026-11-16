@@ -12,6 +12,7 @@ my $t = Test::Nginx->new()->has(qw/http/);
 my @cases = (
     ['compression_filter', 'compression on;'],
     ['compression_static', 'compression_static on;'],
+    ['decompression_filter', 'decompression on;'],
 );
 for my $case (@cases) {
     my ($module, $directive) = @$case;

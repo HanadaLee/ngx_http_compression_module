@@ -135,6 +135,7 @@ ngx_compression_filter_order="ngx_http_postpone_filter_module \
                   ngx_http_sub_filter_module \
                   ngx_http_addition_filter_module \
                   ngx_http_gunzip_filter_module \
+                  ngx_http_decompression_filter_module \
                   ngx_http_userid_filter_module \
                   ngx_http_headers_filter_module \
                   ngx_http_copy_filter_module \
@@ -142,7 +143,7 @@ ngx_compression_filter_order="ngx_http_postpone_filter_module \
                   ngx_http_not_modified_filter_module \
                   ngx_http_slice_filter_module"
 
-for ngx_compression_module in filter static
+for ngx_compression_module in filter static decompression
 do
     ngx_module_type=HTTP_FILTER
     ngx_module_incs="$ngx_addon_dir $ngx_compression_incs"
@@ -173,6 +174,19 @@ do
             ngx_compression_fallback=ngx_http_static_module
             ;;
 
+        decompression)
+            ngx_module_name=ngx_http_decompression_filter_module
+            ngx_module_libs="$ngx_decompression_libs"
+            ngx_module_order="$ngx_module_name \
+                              ngx_http_userid_filter_module \
+                              ngx_http_headers_filter_module \
+                              ngx_http_copy_filter_module \
+                              ngx_http_range_body_filter_module \
+                              ngx_http_not_modified_filter_module \
+                              ngx_http_slice_filter_module"
+            ngx_compression_anchor=ngx_http_gunzip_filter_module
+            ngx_compression_fallback=ngx_http_addition_filter_module
+            ;;
     esac
 
     ngx_module_srcs="$ngx_addon_dir/$ngx_module_name.c \
@@ -190,6 +204,19 @@ do
             *) ngx_compression_anchor=$ngx_compression_fallback ;;
         esac
 
+        if [ "$ngx_compression_module" = decompression ]; then
+            for ngx_compression_candidate in \
+                ngx_http_addition_filter_module ngx_http_sub_filter_module \
+                ngx_http_image_filter_module ngx_http_xslt_filter_module \
+                ngx_http_charset_filter_module ngx_http_ssi_filter_module \
+                ngx_http_postpone_filter_module
+            do
+                case " $ngx_compression_modules " in
+                    *" $ngx_compression_anchor "*) break ;;
+                esac
+                ngx_compression_anchor=$ngx_compression_candidate
+            done
+        fi
 
         ngx_compression_modules=$(echo "$ngx_compression_modules" \
             | sed "s/$ngx_compression_anchor/$ngx_compression_anchor $ngx_module_name/")

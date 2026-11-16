@@ -125,9 +125,9 @@ if [[ $(id -u) == 0 ]]; then
 fi
 if [[ ${TEST_MODULE_LINK:-static} == dynamic ]]; then
     export TEST_NGINX_MODULE_DIR="$source_root/objs"
-    modules=(compression_filter compression_static )
+    modules=(compression_filter compression_static decompression_filter)
     if [[ ${TEST_MODULE_ORDER:-forward} == reverse ]]; then
-        modules=(compression_static compression_filter)
+        modules=(decompression_filter compression_static compression_filter)
     fi
     for module in "${modules[@]}"; do
         export TEST_NGINX_GLOBALS="${TEST_NGINX_GLOBALS:-} load_module $source_root/objs/ngx_http_${module}_module.so;"
