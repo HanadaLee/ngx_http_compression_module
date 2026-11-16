@@ -5,6 +5,9 @@
  */
 
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 #include <ngx_http_compression.h>
 
 
@@ -497,8 +500,8 @@ ngx_http_compression_encodings(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     char  *p = conf;
 
-    ngx_uint_t                          i, j, mask, available;
     ngx_str_t                          *value;
+    ngx_uint_t                          i, j, mask, available;
     ngx_http_compression_encodings_t   *encodings;
 #if (NGX_EXPR)
     ngx_array_t                       **field;

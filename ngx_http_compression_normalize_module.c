@@ -19,7 +19,7 @@ typedef struct {
 
 
 typedef struct {
-    ngx_str_t     original_accept_encoding;
+    ngx_str_t  original_accept_encoding;
 } ngx_http_compression_normalize_ctx_t;
 
 
@@ -81,16 +81,16 @@ static ngx_http_module_t  ngx_http_compression_normalize_module_ctx = {
 
 ngx_module_t  ngx_http_compression_normalize_module = {
     NGX_MODULE_V1,
-    &ngx_http_compression_normalize_module_ctx,    /* module context */
-    ngx_http_compression_normalize_commands,       /* module directives */
-    NGX_HTTP_MODULE,                               /* module type */
-    NULL,                                          /* init master */
-    NULL,                                          /* init module */
-    NULL,                                          /* init process */
-    NULL,                                          /* init thread */
-    NULL,                                          /* exit thread */
-    NULL,                                          /* exit process */
-    NULL,                                          /* exit master */
+    &ngx_http_compression_normalize_module_ctx,  /* module context */
+    ngx_http_compression_normalize_commands,     /* module directives */
+    NGX_HTTP_MODULE,                             /* module type */
+    NULL,                                        /* init master */
+    NULL,                                        /* init module */
+    NULL,                                        /* init process */
+    NULL,                                        /* init thread */
+    NULL,                                        /* exit thread */
+    NULL,                                        /* exit process */
+    NULL,                                        /* exit master */
     NGX_MODULE_V1_PADDING
 };
 
@@ -112,8 +112,8 @@ static ngx_int_t
 ngx_http_compression_normalize_original_variable(
     ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data)
 {
-    ngx_http_compression_normalize_ctx_t  *ctx;
     ngx_table_elt_t                       *ae;
+    ngx_http_compression_normalize_ctx_t  *ctx;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_compression_normalize_module);
 
@@ -217,12 +217,12 @@ ngx_http_compression_normalize(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_compression_normalize_conf_t  *cncf = conf;
 
-    ngx_array_t                          *combinations;
-    ngx_str_t                            *str, *value;
-    ngx_uint_t                            i;
+    ngx_str_t                *str, *value;
+    ngx_uint_t                i;
+    ngx_array_t              *combinations;
 #if (NGX_EXPR)
-    ngx_expr_when_id_t                    expr_id;
-    ngx_conf_expr_ptr_ctx_t              *ctx;
+    ngx_expr_when_id_t        expr_id;
+    ngx_conf_expr_ptr_ctx_t  *ctx;
 #endif
 
 #if (NGX_EXPR)
@@ -302,18 +302,18 @@ static ngx_int_t
 ngx_http_compression_normalize_parse(ngx_http_request_t *r,
     ngx_array_t **encodings)
 {
-    ngx_table_elt_t *h;
-    ngx_str_t        ae;
-    ngx_uint_t       i;
-    u_char          *p, *last, *start, *end;
-    ngx_str_t       *part;
+    u_char           *p, *last, *start, *end;
+    ngx_str_t         ae;
+    ngx_str_t        *part;
+    ngx_uint_t        i;
+    ngx_table_elt_t  *h;
 
     h = r->headers_in.accept_encoding;
 
     if (h == NULL || h->value.len == 0) {
         ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
-            "normalize_accept_encoding: no accept-encoding header found, "
-            "skipping normalization");
+                      "normalize_accept_encoding: no accept-encoding header "
+                      "found, skipping normalization");
         return NGX_DECLINED;
     }
 
@@ -412,11 +412,11 @@ ngx_http_compression_normalize_encoding(ngx_http_request_t *r,
     ngx_str_t *part, ngx_array_t *accepted_encodings)
 {
     u_char     *semicolon;
+    u_char     *p, *last;
+    u_char      c;
     ngx_str_t  *accepted_enc;
     ngx_str_t   encoding;
     ngx_str_t   params;
-    u_char     *p, *last;
-    u_char      c;
     ngx_int_t   q_value_is_zero;
     ngx_uint_t  decimal_points;
 
@@ -537,16 +537,16 @@ ngx_http_compression_normalize_match(ngx_http_request_t *r,
     ngx_array_t *accepted_encodings, ngx_array_t *combinations,
     ngx_str_t *normalized)
 {
-    ngx_uint_t    j, k, i;
-    ngx_str_t    *combination, combo, combo_trimmed;
-    ngx_uint_t    combinations_nelts;
-    ngx_array_t  *combo_parts;
     u_char       *p, *last, *start, *end;
+    ngx_str_t    *combination, combo, combo_trimmed;
     ngx_str_t    *part;
-    ngx_uint_t    all_included, found;
     ngx_str_t    *combo_encodings, combo_encoding;
-    ngx_uint_t    combo_encodings_nelts;
     ngx_str_t    *accepted_encs, accepted_encoding;
+    ngx_uint_t    j, k, i;
+    ngx_uint_t    combinations_nelts;
+    ngx_uint_t    all_included, found;
+    ngx_uint_t    combo_encodings_nelts;
+    ngx_array_t  *combo_parts;
 
     combination = combinations->elts;
     combinations_nelts = combinations->nelts;
@@ -772,17 +772,17 @@ ngx_http_compression_normalize_remove(ngx_http_request_t *r,
 static ngx_int_t
 ngx_http_compression_normalize_handler(ngx_http_request_t *r)
 {
-    ngx_http_compression_normalize_conf_t  *cncf;
-    ngx_http_compression_normalize_ctx_t   *ctx;
+    ngx_str_t                              *enc_parts;
+    ngx_str_t                               normalized;
+    ngx_int_t                               rc;
+    ngx_uint_t                              i;
     ngx_array_t                            *accepted_encodings;
     ngx_array_t                            *combinations;
     ngx_array_t                            *encoding_parts;
-    ngx_str_t                              *enc_parts;
-    ngx_str_t                               normalized;
     ngx_table_elt_t                        *h;
     ngx_http_variable_value_t              *vv;
-    ngx_int_t                               rc;
-    ngx_uint_t                              i;
+    ngx_http_compression_normalize_ctx_t   *ctx;
+    ngx_http_compression_normalize_conf_t  *cncf;
 
     cncf = ngx_http_get_module_loc_conf(r,
                                         ngx_http_compression_normalize_module);
@@ -840,8 +840,7 @@ ngx_http_compression_normalize_handler(ngx_http_request_t *r)
     /* parse Accept-Encoding request header */
     encoding_parts = NULL;
 
-    if (ngx_http_compression_normalize_parse(r, &encoding_parts) != NGX_OK)
-    {
+    if (ngx_http_compression_normalize_parse(r, &encoding_parts) != NGX_OK) {
         return NGX_DECLINED;
     }
 

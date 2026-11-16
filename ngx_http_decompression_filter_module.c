@@ -8,7 +8,11 @@
  */
 
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 #include <ngx_http_compression.h>
+
 #include <zlib.h>
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI_DECODER)
@@ -44,10 +48,10 @@ typedef struct ngx_http_decompression_ctx_s  ngx_http_decompression_ctx_t;
 
 
 typedef struct {
-    size_t        size;
-    ngx_int_t   (*init)(ngx_http_decompression_ctx_t *ctx);
-    ngx_int_t   (*process)(ngx_http_decompression_ctx_t *ctx);
-    void        (*close)(ngx_http_decompression_ctx_t *ctx);
+    size_t       size;
+    ngx_int_t  (*init)(ngx_http_decompression_ctx_t *ctx);
+    ngx_int_t  (*process)(ngx_http_decompression_ctx_t *ctx);
+    void       (*close)(ngx_http_decompression_ctx_t *ctx);
 } ngx_http_decompression_decoder_t;
 
 
@@ -120,7 +124,7 @@ static ngx_int_t ngx_http_decompression_zlib_process(
 static void ngx_http_decompression_zlib_close(
     ngx_http_decompression_ctx_t *ctx);
 static void *ngx_http_decompression_zlib_alloc(void *opaque, u_int items,
-    u_int  size);
+    u_int size);
 static void ngx_http_decompression_zlib_free(void *opaque, void *address);
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI_DECODER)
@@ -290,9 +294,9 @@ static ngx_buf_t                        ngx_http_decompression_empty_buf;
 static ngx_int_t
 ngx_http_decompression_header_filter(ngx_http_request_t *r)
 {
+    ngx_str_t                               *value;
     ngx_uint_t                               i, encoding;
     ngx_flag_t                               enabled, force;
-    ngx_str_t                               *value;
     ngx_pool_cleanup_t                      *cln;
     ngx_http_decompression_ctx_t            *ctx;
     ngx_http_decompression_conf_t           *conf;
@@ -300,7 +304,7 @@ ngx_http_decompression_header_filter(ngx_http_request_t *r)
     const ngx_http_decompression_decoder_t  *decoder;
 
     conf = ngx_http_get_module_loc_conf(r,
-                                       ngx_http_decompression_filter_module);
+                                        ngx_http_decompression_filter_module);
 
 #if (NGX_EXPR)
     enabled = ngx_http_get_expr_flag_value(r, conf->enable);
@@ -381,7 +385,7 @@ ngx_http_decompression_header_filter(ngx_http_request_t *r)
     ngx_http_clear_accept_ranges(r);
     ngx_http_weak_etag(r);
 
-    return  ngx_http_next_header_filter(r);
+    return ngx_http_next_header_filter(r);
 }
 
 
@@ -548,7 +552,7 @@ failed:
     ctx->done = 1;
     ngx_http_decompression_cleanup(ctx);
 
-    return  NGX_ERROR;
+    return NGX_ERROR;
 }
 
 
@@ -592,7 +596,7 @@ ngx_http_decompression_get_buffer(ngx_http_decompression_ctx_t *ctx)
 
     ctx->out_buf = b;
 
-    return  NGX_OK;
+    return NGX_OK;
 }
 
 
@@ -617,7 +621,7 @@ ngx_http_decompression_output(ngx_http_decompression_ctx_t *ctx)
     ctx->last_out = &cl->next;
     ctx->out_buf = NULL;
 
-    return  NGX_OK;
+    return NGX_OK;
 }
 
 
@@ -636,7 +640,7 @@ ngx_http_decompression_result(ngx_http_decompression_ctx_t *ctx,
         return NGX_ERROR;
     }
 
-    return  NGX_OK;
+    return NGX_OK;
 }
 
 
@@ -668,7 +672,7 @@ ngx_http_decompression_zlib_init(ngx_http_decompression_ctx_t *ctx)
         zctx->initialized = 1;
     }
 
-    return  NGX_OK;
+    return NGX_OK;
 }
 
 
@@ -734,12 +738,12 @@ ngx_http_decompression_zlib_process(ngx_http_decompression_ctx_t *ctx)
 
     } else {
         input = (u_int) ngx_min(ngx_buf_size(ctx->in_buf),
-                               NGX_HTTP_DECOMPRESSION_CHUNK);
+                                NGX_HTTP_DECOMPRESSION_CHUNK);
         zctx->stream.next_in = input ? ctx->in_buf->pos : Z_NULL;
     }
 
     output = (u_int) ngx_min(ctx->out_buf->end - ctx->out_buf->last,
-                            NGX_HTTP_DECOMPRESSION_CHUNK);
+                             NGX_HTTP_DECOMPRESSION_CHUNK);
     zctx->stream.avail_in = input;
     zctx->stream.next_out = ctx->out_buf->last;
     zctx->stream.avail_out = output;
@@ -768,8 +772,9 @@ ngx_http_decompression_zlib_process(ngx_http_decompression_ctx_t *ctx)
     ctx->complete = (rc == Z_STREAM_END);
 
     return ngx_http_decompression_result(ctx,
-                zctx->header_pos != zctx->header_len
-                || (!ctx->complete && zctx->stream.avail_out == 0));
+                                         zctx->header_pos != zctx->header_len
+                                         || (!ctx->complete
+                                             && zctx->stream.avail_out == 0));
 }
 
 
@@ -796,7 +801,7 @@ ngx_http_decompression_zlib_alloc(void *opaque, u_int items, u_int size)
         return NULL;
     }
 
-    return  ngx_alloc((size_t) items * size, ctx->request->connection->log);
+    return ngx_alloc((size_t) items * size, ctx->request->connection->log);
 }
 
 
@@ -817,7 +822,7 @@ ngx_http_decompression_brotli_init(ngx_http_decompression_ctx_t *ctx)
     bctx = (ngx_http_decompression_brotli_ctx_t *) ctx;
     bctx->state = BrotliDecoderCreateInstance(NULL, NULL, NULL);
 
-    return  bctx->state ? NGX_OK : NGX_ERROR;
+    return bctx->state ? NGX_OK : NGX_ERROR;
 }
 
 
@@ -826,8 +831,8 @@ ngx_http_decompression_brotli_process(ngx_http_decompression_ctx_t *ctx)
 {
     size_t                                input, output, available_in;
     size_t                                available_out;
-    const uint8_t                        *next_in;
     uint8_t                              *next_out;
+    const uint8_t                        *next_in;
     BrotliDecoderResult                   rc;
     ngx_http_decompression_brotli_ctx_t  *bctx;
 
@@ -852,7 +857,7 @@ ngx_http_decompression_brotli_process(ngx_http_decompression_ctx_t *ctx)
     next_out = ctx->out_buf->last;
 
     rc = BrotliDecoderDecompressStream(bctx->state, &available_in, &next_in,
-                                      &available_out, &next_out, NULL);
+                                       &available_out, &next_out, NULL);
     if (input != available_in) {
         ctx->in_buf->pos += input - available_in;
         ctx->bytes_in += input - available_in;
@@ -902,7 +907,7 @@ ngx_http_decompression_zstd_init(ngx_http_decompression_ctx_t *ctx)
     zctx = (ngx_http_decompression_zstd_ctx_t *) ctx;
     zctx->state = ZSTD_createDCtx();
 
-    return  zctx->state ? NGX_OK : NGX_ERROR;
+    return zctx->state ? NGX_OK : NGX_ERROR;
 }
 
 
@@ -925,7 +930,7 @@ ngx_http_decompression_zstd_process(ngx_http_decompression_ctx_t *ctx)
     in.pos = 0;
     out.dst = ctx->out_buf->last;
     out.size = ngx_min(ctx->out_buf->end - ctx->out_buf->last,
-                      NGX_HTTP_DECOMPRESSION_CHUNK);
+                       NGX_HTTP_DECOMPRESSION_CHUNK);
     out.pos = 0;
 
     rc = ZSTD_decompressStream(zctx->state, &out, &in);
@@ -948,7 +953,7 @@ ngx_http_decompression_zstd_process(ngx_http_decompression_ctx_t *ctx)
     ctx->complete = (rc == 0);
 
     return ngx_http_decompression_result(ctx,
-                                    !ctx->complete && out.pos == out.size);
+                                         !ctx->complete && out.pos == out.size);
 }
 
 
@@ -987,7 +992,7 @@ ngx_http_decompression_create_conf(ngx_conf_t *cf)
 #endif
     conf->encodings = NGX_CONF_UNSET_PTR;
 
-    return  conf;
+    return conf;
 }
 
 
@@ -1011,7 +1016,8 @@ ngx_http_decompression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     }
 
     if (ngx_conf_merge_expr_ptr_value(cf, &conf->encodings, prev->encodings,
-                                     &ngx_http_decompression_default) != NGX_OK)
+                                      &ngx_http_decompression_default)
+        != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
@@ -1019,13 +1025,13 @@ ngx_http_decompression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(conf->enable, prev->enable, 0);
     ngx_conf_merge_value(conf->force, prev->force, 0);
     ngx_conf_merge_ptr_value(conf->encodings, prev->encodings,
-                            &ngx_http_decompression_default);
+                             &ngx_http_decompression_default);
 #endif
 
     ngx_conf_merge_bufs_value(conf->bufs, prev->bufs,
                               (128 * 1024) / ngx_pagesize, ngx_pagesize);
 
-    return  NGX_CONF_OK;
+    return NGX_CONF_OK;
 }
 
 
@@ -1038,5 +1044,5 @@ ngx_http_decompression_filter_init(ngx_conf_t *cf)
     ngx_http_next_body_filter = ngx_http_top_body_filter;
     ngx_http_top_body_filter = ngx_http_decompression_body_filter;
 
-    return  NGX_OK;
+    return NGX_OK;
 }

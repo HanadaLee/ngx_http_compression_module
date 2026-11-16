@@ -44,60 +44,60 @@
 
 typedef struct {
 #if (NGX_EXPR)
-    ngx_array_t                           *enable;
-    ngx_array_t                           *ignore_qvalue;
-    ngx_array_t                           *encodings;
-    ngx_array_t                           *min_length;
-    ngx_array_t                           *max_length;
+    ngx_array_t                       *enable;
+    ngx_array_t                       *ignore_qvalue;
+    ngx_array_t                       *encodings;
+    ngx_array_t                       *min_length;
+    ngx_array_t                       *max_length;
 #else
-    ngx_flag_t                             enable;
-    ngx_flag_t                             ignore_qvalue;
-    ngx_http_compression_encodings_t      *encodings;
-    size_t                                 min_length;
-    size_t                                 max_length;
+    ngx_flag_t                         enable;
+    ngx_flag_t                         ignore_qvalue;
+    ngx_http_compression_encodings_t  *encodings;
+    size_t                             min_length;
+    size_t                             max_length;
 #endif
 
-    ngx_hash_t                             types;
-    ngx_array_t                           *types_keys;
-    ngx_array_t                           *bypass;
-    ngx_bufs_t                             bufs;
-    size_t                                 postpone;
-    ngx_flag_t                             no_buffer;
+    ngx_hash_t                         types;
+    ngx_array_t                       *types_keys;
+    ngx_array_t                       *bypass;
+    ngx_bufs_t                         bufs;
+    size_t                             postpone;
+    ngx_flag_t                         no_buffer;
 
 #if (NGX_EXPR)
-    ngx_array_t                           *gzip_level;
-    ngx_array_t                           *deflate_level;
+    ngx_array_t                       *gzip_level;
+    ngx_array_t                       *deflate_level;
 #else
-    ngx_int_t                              gzip_level;
-    ngx_int_t                              deflate_level;
+    ngx_int_t                          gzip_level;
+    ngx_int_t                          deflate_level;
 #endif
 
-    size_t                                 gzip_window;
-    size_t                                 gzip_hash;
-    size_t                                 deflate_window;
-    size_t                                 deflate_hash;
+    size_t                             gzip_window;
+    size_t                             gzip_hash;
+    size_t                             deflate_window;
+    size_t                             deflate_hash;
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 #if (NGX_EXPR)
-    ngx_array_t                           *brotli_level;
+    ngx_array_t                       *brotli_level;
 #else
-    ngx_int_t                              brotli_level;
+    ngx_int_t                          brotli_level;
 #endif
 
-    size_t                                 brotli_window;
+    size_t                             brotli_window;
 #endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
 #if (NGX_EXPR)
-    ngx_array_t                           *zstd_level;
+    ngx_array_t                       *zstd_level;
 #else
-    ngx_int_t                              zstd_level;
+    ngx_int_t                          zstd_level;
 #endif
 
-    size_t                                 zstd_window;
+    size_t                             zstd_window;
 
 #if (NGX_HTTP_COMPRESSION_HAVE_ZSTD_TARGET_BLOCK_SIZE)
-    size_t                                 zstd_target_block_size;
+    size_t                             zstd_target_block_size;
 #endif
 #endif
 } ngx_http_compression_conf_t;
@@ -107,10 +107,10 @@ typedef struct ngx_http_compression_ctx_s  ngx_http_compression_ctx_t;
 
 
 typedef struct {
-    size_t                           size;
-    ngx_int_t                      (*init)(ngx_http_compression_ctx_t *ctx);
-    ngx_int_t                      (*process)(ngx_http_compression_ctx_t *ctx);
-    void                           (*close)(ngx_http_compression_ctx_t *ctx);
+    size_t       size;
+    ngx_int_t  (*init)(ngx_http_compression_ctx_t *ctx);
+    ngx_int_t  (*process)(ngx_http_compression_ctx_t *ctx);
+    void       (*close)(ngx_http_compression_ctx_t *ctx);
 } ngx_http_compression_encoder_t;
 
 
@@ -148,23 +148,23 @@ struct ngx_http_compression_ctx_s {
 
 
 typedef struct {
-    ngx_http_compression_ctx_t             ctx;
-    z_stream                               stream;
-    u_char                                *preallocated;
-    u_char                                *free_mem;
-    u_char                                *end;
-    u_char                                 buffer[8];
-    u_int                                  pos;
-    u_int                                  last;
-    unsigned                               flushed:1;
+    ngx_http_compression_ctx_t  ctx;
+    z_stream                    stream;
+    u_char                     *preallocated;
+    u_char                     *free_mem;
+    u_char                     *end;
+    u_char                      buffer[8];
+    u_int                       pos;
+    u_int                       last;
+    unsigned                    flushed:1;
 } ngx_http_compression_zlib_ctx_t;
 
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 
 typedef struct {
-    ngx_http_compression_ctx_t             ctx;
-    BrotliEncoderState                    *state;
+    ngx_http_compression_ctx_t  ctx;
+    BrotliEncoderState         *state;
 } ngx_http_compression_brotli_ctx_t;
 
 #endif
@@ -173,8 +173,8 @@ typedef struct {
 #if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
 
 typedef struct {
-    ngx_http_compression_ctx_t             ctx;
-    ZSTD_CCtx                             *state;
+    ngx_http_compression_ctx_t  ctx;
+    ZSTD_CCtx                  *state;
 } ngx_http_compression_zstd_ctx_t;
 
 #endif
@@ -508,17 +508,17 @@ static ngx_command_t  ngx_http_compression_commands[] = {
 
 
 static ngx_http_module_t  ngx_http_compression_module_ctx = {
-    ngx_http_compression_add_variables,    /* preconfiguration */
-    ngx_http_compression_filter_init,      /* postconfiguration */
+    ngx_http_compression_add_variables,  /* preconfiguration */
+    ngx_http_compression_filter_init,    /* postconfiguration */
 
-    NULL,                                  /* create main conf */
-    NULL,                                  /* init main conf */
+    NULL,                                /* create main conf */
+    NULL,                                /* init main conf */
 
-    NULL,                                  /* create server conf */
-    NULL,                                  /* merge server conf */
+    NULL,                                /* create server conf */
+    NULL,                                /* merge server conf */
 
-    ngx_http_compression_create_conf,      /* create location conf */
-    ngx_http_compression_merge_conf        /* merge location conf */
+    ngx_http_compression_create_conf,    /* create location conf */
+    ngx_http_compression_merge_conf      /* merge location conf */
 };
 
 
@@ -1012,8 +1012,8 @@ ngx_http_compression_queue(ngx_http_compression_ctx_t *ctx, ngx_chain_t *in)
 {
     size_t        size;
     ngx_buf_t    *b;
-    ngx_chain_t  *cl, **last;
     ngx_pool_t   *pool;
+    ngx_chain_t  *cl, **last;
 
     pool = ctx->request->pool;
     last = &ctx->in;
@@ -1409,8 +1409,8 @@ ngx_http_compression_zlib_alloc(void *opaque, u_int items, u_int size)
 {
     ngx_http_compression_zlib_ctx_t  *zctx = opaque;
 
-    void    *p;
-    size_t   len;
+    void   *p;
+    size_t  len;
 
     if (size && items > NGX_MAX_SIZE_T_VALUE / size) {
         return NULL;
@@ -1818,8 +1818,8 @@ ngx_http_compression_level(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_conf_num_bounds_t    *bounds;
 #if (NGX_EXPR)
     ngx_array_t             **values;
-    ngx_conf_expr_num_ctx_t  *ctx;
     ngx_expr_when_id_t        id;
+    ngx_conf_expr_num_ctx_t  *ctx;
 #else
     ngx_int_t                *np;
 #endif
@@ -1965,9 +1965,9 @@ static char *
 ngx_http_compression_zstd_block_size(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf)
 {
-    char         *rv;
-    size_t       *size;
-    ZSTD_bounds   bounds;
+    char        *rv;
+    size_t      *size;
+    ZSTD_bounds  bounds;
 
     rv = ngx_conf_set_size_slot(cf, cmd, conf);
     if (rv != NGX_CONF_OK) {

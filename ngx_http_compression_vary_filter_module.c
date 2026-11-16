@@ -74,8 +74,8 @@ ngx_http_compression_vary_header_filter(ngx_http_request_t *r)
 {
     u_char                                   *data, *last, *p, *start;
     size_t                                    total_len;
-    ngx_uint_t                                found, has_encoding, i, j, n;
     ngx_str_t                                 token, *v, *value;
+    ngx_uint_t                                found, has_encoding, i, j, n;
     ngx_array_t                               unique_values;
     ngx_list_part_t                          *part;
     ngx_table_elt_t                          *h, *header;

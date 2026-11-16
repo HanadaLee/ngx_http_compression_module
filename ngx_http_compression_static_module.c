@@ -8,6 +8,9 @@
  */
 
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 #include <ngx_http_compression.h>
 
 
@@ -138,11 +141,11 @@ ngx_http_compression_static_handler(ngx_http_request_t *r)
     u_char                              *p;
     size_t                               root, len;
     ngx_int_t                            rc, encoding;
-    ngx_uint_t                           enable, mask, i, level;
-    ngx_flag_t                           ignore;
     ngx_str_t                            path, *suffix;
     ngx_log_t                           *log;
     ngx_buf_t                           *b;
+    ngx_uint_t                           enable, mask, i, level;
+    ngx_flag_t                           ignore;
     ngx_chain_t                          out;
     ngx_table_elt_t                     *h;
     ngx_open_file_info_t                 of;
@@ -346,7 +349,7 @@ ngx_http_compression_static_handler(ngx_http_request_t *r)
     out.buf = b;
     out.next = NULL;
 
-    return  ngx_http_output_filter(r, &out);
+    return ngx_http_output_filter(r, &out);
 }
 
 
@@ -369,7 +372,7 @@ ngx_http_compression_static_create_conf(ngx_conf_t *cf)
 #endif
     conf->encodings = NGX_CONF_UNSET_PTR;
 
-    return  conf;
+    return conf;
 }
 
 
@@ -382,32 +385,32 @@ ngx_http_compression_static_merge_conf(ngx_conf_t *cf, void *parent,
 
 #if (NGX_EXPR)
     if (ngx_conf_merge_expr_enum_value(cf, &conf->enable, prev->enable,
-                                      NGX_HTTP_COMPRESSION_STATIC_OFF)
+                                       NGX_HTTP_COMPRESSION_STATIC_OFF)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
     if (ngx_conf_merge_expr_flag_value(cf, &conf->ignore_qvalue,
-                                      prev->ignore_qvalue, 0) != NGX_OK)
+                                       prev->ignore_qvalue, 0) != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
     if (ngx_conf_merge_expr_ptr_value(cf, &conf->encodings, prev->encodings,
-                                     &ngx_http_compression_default) != NGX_OK)
+                                      &ngx_http_compression_default) != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 #else
     ngx_conf_merge_uint_value(conf->enable, prev->enable,
-                             NGX_HTTP_COMPRESSION_STATIC_OFF);
+                              NGX_HTTP_COMPRESSION_STATIC_OFF);
     ngx_conf_merge_value(conf->ignore_qvalue, prev->ignore_qvalue, 0);
     ngx_conf_merge_ptr_value(conf->encodings, prev->encodings,
-                            &ngx_http_compression_default);
+                             &ngx_http_compression_default);
 #endif
 
-    return  NGX_CONF_OK;
+    return NGX_CONF_OK;
 }
 
 
@@ -425,5 +428,5 @@ ngx_http_compression_static_init(ngx_conf_t *cf)
 
     *h = ngx_http_compression_static_handler;
 
-    return  NGX_OK;
+    return NGX_OK;
 }
