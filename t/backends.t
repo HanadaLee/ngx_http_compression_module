@@ -11,7 +11,6 @@ use Compression;
 
 my @available = encodings();
 my %available = map { $_ => 1 } @available;
-my $default = $available{gzip} ? 'gzip' : $available{br} ? 'br' : 'zstd';
 my $t = Test::Nginx->new()->has(qw/http/);
 my @directives = (
     ['gzip', 'compression_gzip_level 1;'],
@@ -108,7 +107,7 @@ write_config($t, $config);
 $t->run();
 
 check_response($t, request('/default/body.txt', join ', ', @available),
-    $default, $plain, 'available default encoding');
+    'gzip', $plain, 'default gzip encoding');
 for my $encoding (@available) {
     check_response($t, request('/body.txt', $encoding), $encoding, $plain,
         "$encoding compressed response");

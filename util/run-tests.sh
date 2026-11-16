@@ -73,10 +73,12 @@ else
     configured=0
 fi
 
-if [[ ${TEST_COMPRESSION_LIBRARIES:-} == none ]]; then
+if [[ -n ${TEST_COMPRESSION_LIBRARIES:-}
+      && " $TEST_COMPRESSION_LIBRARIES " != *" zlib "* ]]; then
     [[ $configured == 0 ]]
-    grep -q 'requires at least one of' "$output_root/configure.log"
-    echo 'PASS: configure rejects a build without compression libraries'
+    grep -q 'ngx_http_compression_filter_module requires the zlib library' \
+        "$output_root/configure.log"
+    echo 'PASS: configure rejects a build without zlib'
     exit 0
 fi
 [[ $configured == 1 ]]
@@ -99,11 +101,8 @@ fi
 if grep -Eq '^#define NGX_HTTP_COMPRESSION_HAVE_BROTLI[[:space:]]+1$' "$auto_config"; then
     encodings+=(br)
 fi
-if grep -Eq '^#define NGX_HTTP_COMPRESSION_HAVE_ZLIB[[:space:]]+1$' "$auto_config"; then
-    encodings+=(gzip deflate)
-fi
+encodings+=(gzip deflate)
 export TEST_NGINX_COMPRESSION_ENCODINGS="${encodings[*]}"
-[[ -n $TEST_NGINX_COMPRESSION_ENCODINGS ]]
 
 export TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE=0
 if grep -Eq '^#define NGX_HTTP_COMPRESSION_HAVE_ZSTD_TARGET_BLOCK_SIZE[[:space:]]+1$' "$auto_config"; then

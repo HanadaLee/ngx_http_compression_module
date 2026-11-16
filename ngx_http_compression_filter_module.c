@@ -11,9 +11,7 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
 #include <zlib.h>
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 #include <brotli/encode.h>
@@ -80,7 +78,6 @@ typedef struct {
     size_t                                 postpone;
     ngx_flag_t                             no_buffer;
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
 #if (NGX_EXPR)
     ngx_array_t                           *gzip_level;
     ngx_array_t                           *deflate_level;
@@ -93,7 +90,6 @@ typedef struct {
     size_t                                 gzip_hash;
     size_t                                 deflate_window;
     size_t                                 deflate_hash;
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 #if (NGX_EXPR)
@@ -165,8 +161,6 @@ struct ngx_http_compression_ctx_s {
 };
 
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
-
 typedef struct {
     ngx_http_compression_ctx_t             ctx;
     z_stream                               stream;
@@ -178,8 +172,6 @@ typedef struct {
     u_int                                  last;
     unsigned                               flushed:1;
 } ngx_http_compression_zlib_ctx_t;
-
-#endif
 
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
@@ -220,7 +212,6 @@ static ngx_int_t ngx_http_compression_post(ngx_http_compression_ctx_t *ctx);
 static void ngx_http_compression_handler(ngx_event_t *ev);
 static void ngx_http_compression_cleanup(void *data);
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
 static ngx_int_t ngx_http_compression_zlib_init(
     ngx_http_compression_ctx_t *ctx);
 static ngx_int_t ngx_http_compression_zlib_process(
@@ -229,7 +220,6 @@ static void ngx_http_compression_zlib_close(ngx_http_compression_ctx_t *ctx);
 static void *ngx_http_compression_zlib_alloc(void *opaque, u_int items,
     u_int size);
 static void ngx_http_compression_zlib_free(void *opaque, void *address);
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 static ngx_int_t ngx_http_compression_brotli_init(
@@ -273,13 +263,9 @@ static char *ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent,
 static ngx_int_t ngx_http_compression_filter_init(ngx_conf_t *cf);
 
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
-
 static ngx_conf_num_bounds_t  ngx_http_compression_zlib_bounds = {
     ngx_conf_check_num_bounds, 1, 9
 };
-
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 
@@ -305,13 +291,7 @@ static ngx_str_t  ngx_http_compression_aliases[] = {
 };
 
 static ngx_http_compression_encodings_t  ngx_http_compression_default = {
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     1, { NGX_HTTP_COMPRESSION_GZIP, 0, 0, 0 }
-#elif (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
-    1, { NGX_HTTP_COMPRESSION_BROTLI, 0, 0, 0 }
-#else
-    1, { NGX_HTTP_COMPRESSION_ZSTD, 0, 0, 0 }
-#endif
 };
 
 
@@ -449,8 +429,6 @@ static ngx_command_t  ngx_http_compression_commands[] = {
       offsetof(ngx_http_compression_conf_t, no_buffer),
       NULL },
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
-
     { ngx_string("compression_gzip_level"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
 #if (NGX_EXPR)
@@ -502,8 +480,6 @@ static ngx_command_t  ngx_http_compression_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_compression_conf_t, deflate_hash),
       NULL },
-
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 
@@ -610,16 +586,12 @@ static ngx_http_variable_t  ngx_http_compression_variables[] = {
 };
 
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
-
 static const ngx_http_compression_encoder_t  ngx_http_compression_zlib = {
     sizeof(ngx_http_compression_zlib_ctx_t),
     ngx_http_compression_zlib_init,
     ngx_http_compression_zlib_process,
     ngx_http_compression_zlib_close
 };
-
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
 
@@ -647,11 +619,7 @@ static const ngx_http_compression_encoder_t  ngx_http_compression_zstd = {
 static const ngx_http_compression_encoder_t
     *ngx_http_compression_encoders[] =
 {
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     &ngx_http_compression_zlib,
-#else
-    NULL,
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     &ngx_http_compression_brotli,
@@ -665,11 +633,7 @@ static const ngx_http_compression_encoder_t
     NULL,
 #endif
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     &ngx_http_compression_zlib
-#else
-    NULL
-#endif
 };
 
 
@@ -777,7 +741,6 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
 
     switch (encoding) {
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     case NGX_HTTP_COMPRESSION_GZIP:
 #if (NGX_EXPR)
         level = ngx_http_get_expr_num_value(r, conf->gzip_level);
@@ -785,7 +748,6 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
         level = conf->gzip_level;
 #endif
         break;
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     case NGX_HTTP_COMPRESSION_BROTLI:
@@ -807,7 +769,6 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
         break;
 #endif
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     case NGX_HTTP_COMPRESSION_DEFLATE:
 #if (NGX_EXPR)
         level = ngx_http_get_expr_num_value(r, conf->deflate_level);
@@ -815,7 +776,6 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
         level = conf->deflate_level;
 #endif
         break;
-#endif
 
     default:
         return NGX_ERROR;
@@ -1658,8 +1618,6 @@ ngx_http_compression_cleanup(void *data)
 }
 
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
-
 static ngx_int_t
 ngx_http_compression_zlib_init(ngx_http_compression_ctx_t *ctx)
 {
@@ -1890,8 +1848,6 @@ ngx_http_compression_zlib_free(void *opaque, void *address)
 
     ngx_free(address);
 }
-
-#endif
 
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
@@ -2278,8 +2234,6 @@ ngx_http_compression_alias(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         }
     }
 
-    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                       "could not find core directive \"%V\"", name);
     return NGX_CONF_ERROR;
 }
 
@@ -2489,15 +2443,12 @@ ngx_http_compression_size(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #endif
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     if (cmd->offset == offsetof(ngx_http_compression_conf_t, gzip_hash)
         || cmd->offset
            == offsetof(ngx_http_compression_conf_t, deflate_hash))
     {
         max = 128 * 1024;
     }
-
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
     if (cmd->offset == offsetof(ngx_http_compression_conf_t, zstd_window)) {
@@ -2584,11 +2535,8 @@ ngx_http_compression_create_conf(ngx_conf_t *cf)
     conf->ignore_qvalue = NGX_CONF_UNSET_PTR;
     conf->min_length = NGX_CONF_UNSET_PTR;
     conf->max_length = NGX_CONF_UNSET_PTR;
-
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     conf->gzip_level = NGX_CONF_UNSET_PTR;
     conf->deflate_level = NGX_CONF_UNSET_PTR;
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     conf->brotli_level = NGX_CONF_UNSET_PTR;
@@ -2603,11 +2551,8 @@ ngx_http_compression_create_conf(ngx_conf_t *cf)
     conf->ignore_qvalue = NGX_CONF_UNSET;
     conf->min_length = NGX_CONF_UNSET_SIZE;
     conf->max_length = NGX_CONF_UNSET_SIZE;
-
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     conf->gzip_level = NGX_MAX_INT_T_VALUE;
     conf->deflate_level = NGX_MAX_INT_T_VALUE;
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     conf->brotli_level = NGX_MAX_INT_T_VALUE;
@@ -2623,13 +2568,10 @@ ngx_http_compression_create_conf(ngx_conf_t *cf)
     conf->bypass = NGX_CONF_UNSET_PTR;
     conf->no_buffer = NGX_CONF_UNSET;
     conf->postpone = NGX_CONF_UNSET_SIZE;
-
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     conf->gzip_window = NGX_CONF_UNSET_SIZE;
     conf->gzip_hash = NGX_CONF_UNSET_SIZE;
     conf->deflate_window = NGX_CONF_UNSET_SIZE;
     conf->deflate_hash = NGX_CONF_UNSET_SIZE;
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     conf->brotli_window = NGX_CONF_UNSET_SIZE;
@@ -2678,7 +2620,6 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         return NGX_CONF_ERROR;
     }
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     if (ngx_conf_merge_expr_num_value(cf, &conf->gzip_level,
                                       prev->gzip_level, 1) != NGX_OK)
     {
@@ -2690,8 +2631,6 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     {
         return NGX_CONF_ERROR;
     }
-
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     if (ngx_conf_merge_expr_num_value(cf, &conf->brotli_level,
@@ -2723,7 +2662,6 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_size_value(conf->min_length, prev->min_length, 20);
     ngx_conf_merge_size_value(conf->max_length, prev->max_length, 0);
 
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     if (conf->gzip_level == NGX_MAX_INT_T_VALUE) {
         conf->gzip_level = prev->gzip_level == NGX_MAX_INT_T_VALUE
                            ? 1 : prev->gzip_level;
@@ -2733,8 +2671,6 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         conf->deflate_level = prev->deflate_level == NGX_MAX_INT_T_VALUE
                               ? 1 : prev->deflate_level;
     }
-
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     if (conf->brotli_level == NGX_MAX_INT_T_VALUE) {
@@ -2761,13 +2697,10 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_bufs_value(conf->bufs, prev->bufs,
                               (128 * 1024) / ngx_pagesize, ngx_pagesize);
     ngx_conf_merge_size_value(conf->postpone, prev->postpone, 0);
-
-#if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
     ngx_conf_merge_size_value(conf->gzip_window, prev->gzip_window, 15);
     ngx_conf_merge_size_value(conf->gzip_hash, prev->gzip_hash, 8);
     ngx_conf_merge_size_value(conf->deflate_window, prev->deflate_window, 15);
     ngx_conf_merge_size_value(conf->deflate_hash, prev->deflate_hash, 8);
-#endif
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     ngx_conf_merge_size_value(conf->brotli_window, prev->brotli_window, 19);

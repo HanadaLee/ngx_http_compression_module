@@ -26,7 +26,7 @@ http {
 
 ## Installation
 
-Requires the development files for at least one of the following libraries. Available backends are detected during configuration.
+Requires the zlib development files. Brotli and Zstd are optional and detected during configuration.
 
 | Library | Encodings | Directives |
 | --- | --- | --- |
@@ -92,8 +92,6 @@ Enables compression for responses with status 200, 207, 403, or 404. Responses c
 **Context:** `http`, `server`, `location`, `when`
 
 Sets the available encodings and their preference order: `gzip`, `br`, `zstd`, and `deflate`. A list at a lower configuration level replaces the inherited list.
-
-The default is the first compiled encoding in the order `gzip`, `br`, `zstd`.
 
 The `deflate` encoding uses the zlib format.
 

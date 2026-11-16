@@ -14,7 +14,7 @@ do
         zlib)
             ngx_compression_package=zlib
             ngx_feature="zlib compression library"
-            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_ZLIB
+            ngx_feature_name=
             ngx_feature_incs="#include <zlib.h>"
             ngx_feature_libs="-lz"
             ngx_feature_test="z_stream  stream = {0};
@@ -75,18 +75,16 @@ do
                               return ZSTD_isError(bounds.error);"
             . auto/feature
         fi
-    fi
-done
+    elif [ "$ngx_compression_library" = zlib ]; then
+        cat << END
 
-if [ -z "$ngx_compression_libs" ]; then
-    cat << END
-
-$0: error: ngx_http_compression_filter_module requires at least one of
-zlib, libbrotlienc or libzstd; set PKG_CONFIG_PATH for custom installations
+$0: error: ngx_http_compression_filter_module requires the zlib library.
+Set PKG_CONFIG_PATH for a custom installation.
 
 END
-    exit 1
-fi
+        exit 1
+    fi
+done
 
 have=NGX_HTTP_COMPRESSION . auto/have
 have=NGX_HTTP_GZIP . auto/have
