@@ -41,6 +41,7 @@
 #define NGX_HTTP_COMPRESSION_FLUSH                1
 #define NGX_HTTP_COMPRESSION_FINISH               2
 
+#define NGX_HTTP_COMPRESSION_MULTI_STATUS         207
 #define NGX_HTTP_COMPRESSION_NOT_ACCEPTABLE       406
 
 
@@ -649,7 +650,8 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
     if (r != r->main || r->header_only || r->method == NGX_HTTP_HEAD
         || (r->headers_out.status != NGX_HTTP_OK
             && r->headers_out.status != NGX_HTTP_FORBIDDEN
-            && r->headers_out.status != NGX_HTTP_NOT_FOUND)
+            && r->headers_out.status != NGX_HTTP_NOT_FOUND
+            && r->headers_out.status != NGX_HTTP_COMPRESSION_MULTI_STATUS)
         || (r->headers_out.content_encoding
             && r->headers_out.content_encoding->value.len))
     {

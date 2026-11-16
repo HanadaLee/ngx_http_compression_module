@@ -60,6 +60,9 @@ http {
             alias %%TESTDIR%%/;
             add_header Cache-Control no-transform=1;
         }
+        location /multi {
+            return 207 '<multistatus>one two three</multistatus>';
+        }
     }
 }
 EOF
@@ -75,6 +78,13 @@ for my $encoding (encodings()) {
             undef, $plain, "$encoding $location no-transform");
     }
 
+    my $response = request('/multi', $encoding);
+    like($response, qr/^HTTP\/1\.1 207 /, "$encoding multi-status response");
+    like($response, qr/^Content-Encoding: \Q$encoding\E\r?$/mi,
+        "$encoding multi-status encoding");
+    is(decoded($t, $response, '<multistatus>one two three</multistatus>'),
+        '<multistatus>one two three</multistatus>',
+        "$encoding multi-status round trip");
 }
 
 $t->stop();
