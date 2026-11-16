@@ -6,6 +6,7 @@ use warnings;
 use Test::More;
 use Test::Nginx qw/:DEFAULT http_content/;
 use JSON::PP;
+use Digest::SHA qw/sha256_hex/;
 use FindBin;
 use lib "$FindBin::Bin/lib";
 use Compression;
@@ -16,6 +17,20 @@ my $t = Test::Nginx->new()->has(qw/http/);
 my $plain = join '', map { sprintf "%08x zstd window %c\n", $_, $_ % 251 }
     (0 .. 65535);
 $t->write_file('body.txt', $plain);
+my $block_plain = join '', map {
+    '{"id":' . $_ . ',"value":"' . sha256_hex(pack 'N', $_) . '"}' . "\n"
+} (0 .. 16383);
+$t->write_file('block.json', $block_plain);
+my $block_config = $ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE} ? <<'EOF' : '';
+        location /block/ {
+            alias %%TESTDIR%%/;
+            compression_zstd_target_block_size 4k;
+        }
+        location /library/ {
+            alias %%TESTDIR%%/;
+            compression_zstd_target_block_size 0;
+        }
+EOF
 my $config = <<'EOF';
 %%TEST_GLOBALS%%
 daemon off;
@@ -52,9 +67,11 @@ http {
             compression_zstd_window 8m;
             compression_zstd_level 20;
         }
+__BLOCK_CONFIG__
     }
 }
 EOF
+$config =~ s/__BLOCK_CONFIG__/$block_config/;
 write_config($t, $config);
 $t->run();
 
@@ -66,6 +83,8 @@ my @requests = (
     ['/high/', 8 * 1024 * 1024],
     ['/', 512 * 1024],
 );
+push @requests, ['/block/', 512 * 1024], ['/library/', 512 * 1024],
+    ['/', 512 * 1024] if $ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE};
 
 for my $case (@requests) {
     my ($path, $window) = @$case;
@@ -79,6 +98,24 @@ for my $case (@requests) {
     is($?, 0, 'libzstd accepts frame header');
     my $frame = decode_json($json);
     cmp_ok($frame->{window_size}, '<=', $window, "$path window limit");
+}
+
+if ($ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE}) {
+    my %bodies;
+    for my $path ('/', '/block/', '/library/', '/') {
+        my $response = request($path . 'block.json', 'zstd');
+        check_response($t, $response, 'zstd', $block_plain,
+            "zstd $path target block size");
+        my $body = http_content($response);
+        if (exists $bodies{$path}) {
+            is($body, $bodies{$path}, 'default block size is restored between requests');
+        }
+        $bodies{$path} = $body;
+    }
+    isnt($bodies{'/block/'}, $bodies{'/library/'},
+        'target block size changes the encoded stream');
+    is($bodies{'/'}, $bodies{'/library/'},
+        'default block size uses the library default');
 }
 
 $t->stop();

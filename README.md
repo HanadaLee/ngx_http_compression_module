@@ -243,6 +243,16 @@ Sets the Zstd compression level. The range is determined by libzstd; negative le
 
 Sets the Zstd window size, a power of two from `1k` to `8m`.
 
+### compression_zstd_target_block_size
+
+**Syntax:** `compression_zstd_target_block_size size;`  
+**Default:** `compression_zstd_target_block_size 0;`  
+**Context:** `http`, `server`, `location`
+
+Sets the target compressed block size. This is an approximate target, independent of the output buffer size. The value `0` uses the library default.
+
+Available with libzstd 1.5.6 or later.
+
 ### compression_deflate_level
 
 **Syntax:** `compression_deflate_level level;`  
@@ -299,7 +309,7 @@ prove -v t/*.t
 
 Set `TEST_NGINX_EXPR=1` for conditional configuration tests, `TEST_NGINX_COMPRESSION_AUX=1` when normalize and vary are compiled, and `TEST_NGINX_OPENRESTY=1` for Lua response tests.
 
-For a partial build tested directly with `prove`, set `TEST_NGINX_COMPRESSION_ENCODINGS` to its available encodings, separated by spaces, and `TEST_NGINX_GZIP=0` when the native gzip modules are absent.
+For a partial build tested directly with `prove`, set `TEST_NGINX_COMPRESSION_ENCODINGS` to its available encodings, separated by spaces, and `TEST_NGINX_GZIP=0` when the native gzip modules are absent. Set `TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE=1` when the target block size directive is available.
 
 ## License
 

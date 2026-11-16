@@ -56,6 +56,13 @@ my @tests = (
     ['compression_disable msie6;', 1, 'msie6 mask'],
     ['compression_disable "[";', 0, 'invalid alias regex'],
 );
+push @tests,
+    ['compression_zstd_target_block_size 16k;', 1, 'target block size'],
+    ['compression_zstd_target_block_size 0;', 1, 'library block size'],
+    ['compression_zstd_target_block_size 4g;', 0, 'oversized target block'],
+    ['compression_zstd_target_block_size 16k; compression_zstd_target_block_size 16k;',
+        0, 'duplicate target block size']
+    if $ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE};
 for my $test (@tests) {
     $t->write_file_expand('nginx.conf', <<EOF);
 %%TEST_GLOBALS%%

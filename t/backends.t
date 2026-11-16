@@ -44,6 +44,13 @@ for my $case (@directives) {
             "$name is not registered");
     }
 }
+my ($block_ok, $block_log) = config_test('compression_zstd_target_block_size 16k;');
+is($block_ok, $ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE} ? 1 : 0,
+    'target compressed block size availability');
+if (!$ENV{TEST_NGINX_ZSTD_TARGET_BLOCK_SIZE}) {
+    like($block_log, qr/unknown directive "compression_zstd_target_block_size"/,
+        'target block directive is absent without library support');
+}
 if (defined $ENV{TEST_NGINX_GZIP} && !$ENV{TEST_NGINX_GZIP}) {
     for my $directive (qw/gzip gzip_static gunzip/) {
         my ($ok, $log) = config_test("$directive on;");

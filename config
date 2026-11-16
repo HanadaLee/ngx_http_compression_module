@@ -64,6 +64,17 @@ do
     if [ "$ngx_found" = yes ]; then
         ngx_compression_incs="$ngx_compression_incs $ngx_feature_path"
         ngx_compression_libs="$ngx_compression_libs $ngx_feature_libs"
+
+        if [ "$ngx_compression_library" = zstd ]; then
+            ngx_feature="zstd target compressed block size"
+            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_ZSTD_TARGET_BLOCK_SIZE
+            ngx_feature_test="ZSTD_bounds  bounds;
+
+                              bounds = ZSTD_cParam_getBounds(
+                                                   ZSTD_c_targetCBlockSize);
+                              return ZSTD_isError(bounds.error);"
+            . auto/feature
+        fi
     fi
 done
 
