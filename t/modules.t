@@ -13,6 +13,7 @@ my @cases = (
     ['compression_filter', 'compression on;'],
     ['compression_static', 'compression_static on;'],
     ['decompression_filter', 'decompression on;'],
+    ['compression_vary_filter', 'compression_vary on;'],
 );
 for my $case (@cases) {
     my ($module, $directive) = @$case;
@@ -37,7 +38,7 @@ EOF
         die "exec: $!";
     }
     waitpid($pid, 0);
-    is($?, 0, "$module loads without the other two modules")
+    is($?, 0, "$module loads without the other modules")
         or diag $t->read_file('command.log');
 }
 undef $t;

@@ -30,9 +30,8 @@ if [[ ${TEST_NGINX_EXPR:-0} == 1 ]]; then
     args+=(--add-module="${TEST_EXPR_SOURCE:-$module_root/.ci/ngx_expr_module}")
 fi
 
-if [[ -d "$module_root/.ci/normalize" && -d "$module_root/.ci/vary" ]]; then
-    args+=(--add-module="$module_root/.ci/normalize"
-           --add-module="$module_root/.ci/vary")
+if [[ -d "$module_root/.ci/normalize" ]]; then
+    args+=(--add-module="$module_root/.ci/normalize")
     export TEST_NGINX_COMPRESSION_AUX=1
 fi
 
@@ -125,9 +124,9 @@ if [[ $(id -u) == 0 ]]; then
 fi
 if [[ ${TEST_MODULE_LINK:-static} == dynamic ]]; then
     export TEST_NGINX_MODULE_DIR="$source_root/objs"
-    modules=(compression_filter compression_static decompression_filter)
+    modules=(compression_filter compression_static decompression_filter compression_vary_filter)
     if [[ ${TEST_MODULE_ORDER:-forward} == reverse ]]; then
-        modules=(decompression_filter compression_static compression_filter)
+        modules=(compression_vary_filter decompression_filter compression_static compression_filter)
     fi
     for module in "${modules[@]}"; do
         export TEST_NGINX_GLOBALS="${TEST_NGINX_GLOBALS:-} load_module $source_root/objs/ngx_http_${module}_module.so;"

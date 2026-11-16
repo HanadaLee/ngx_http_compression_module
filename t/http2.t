@@ -26,6 +26,7 @@ http {
     %%TEST_GLOBALS_HTTP%%
     default_type text/plain;
     gzip off;
+    compression_vary on;
     compression on;
     compression_types *;
     compression_min_length 0;
@@ -74,6 +75,7 @@ for my $request (@requests) {
     is($header->{headers}->{':status'}, 200, "$encoding HTTP/2 status");
     is($header->{headers}->{'content-encoding'}, $encoding,
         "$encoding HTTP/2 encoding");
+    is($header->{headers}->{'vary'}, 'Accept-Encoding', "$encoding HTTP/2 Vary");
     my $response = "HTTP/1.1 200 OK\r\nContent-Encoding: $encoding\r\n\r\n$body";
     is(decoded($t, $response, $plain), $plain,
         "$encoding HTTP/2 multiplexed round trip");

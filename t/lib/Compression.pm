@@ -172,6 +172,7 @@ sub check_static {
         is($header->{headers}->{':status'}, 200, "$name status");
         my $expected = $accept eq 'identity' ? undef : $encoding;
         is($header->{headers}->{'content-encoding'}, $expected, "$name encoding");
+        is($header->{headers}->{'vary'}, 'Accept-Encoding', "$name Vary");
         my $response = "HTTP/1.1 200 OK\r\n";
         $response .= "Content-Encoding: $encoding\r\n" if defined $expected;
         is(decoded($t, "$response\r\n$body", $plain), $plain, "$name round trip");

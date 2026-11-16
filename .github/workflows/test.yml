@@ -133,12 +133,6 @@ jobs:
           repository: HanadaLee/ngx_http_compression_normalize_module
           ref: 1.0.0
           path: .ci/normalize
-      - uses: actions/checkout@v6
-        if: matrix.standalone != 1
-        with:
-          repository: HanadaLee/ngx_http_compression_vary_filter_module
-          ref: 1.0.0
-          path: .ci/vary
       - name: Build and test
         env:
           TEST_NGINX_EXPR: ${{ matrix.expr }}
