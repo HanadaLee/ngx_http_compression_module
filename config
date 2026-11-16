@@ -143,7 +143,7 @@ ngx_compression_filter_order="ngx_http_postpone_filter_module \
                   ngx_http_not_modified_filter_module \
                   ngx_http_slice_filter_module"
 
-for ngx_compression_module in filter static decompression vary
+for ngx_compression_module in filter static decompression vary normalize
 do
     ngx_module_type=HTTP_FILTER
     ngx_module_incs="$ngx_addon_dir $ngx_compression_incs"
@@ -203,6 +203,16 @@ do
             ngx_compression_anchor=ngx_http_range_header_filter_module
             ngx_compression_fallback=ngx_http_range_header_filter_module
             ;;
+
+        normalize)
+            ngx_module_type=HTTP
+            ngx_module_name=ngx_http_compression_normalize_module
+            ngx_module_incs=
+            ngx_module_deps=
+            ngx_module_libs=
+            ngx_module_srcs=
+            ngx_module_order=
+            ;;
     esac
 
     ngx_module_srcs="$ngx_addon_dir/$ngx_module_name.c \
@@ -210,7 +220,8 @@ do
 
     . auto/module
 
-    if [ "$ngx_module_link" != DYNAMIC ]; then
+    if [ "$ngx_module_link" != DYNAMIC \
+         -a "$ngx_compression_module" != normalize ]; then
         eval ngx_compression_modules="\$${ngx_module_type}_MODULES"
         ngx_compression_modules=$(echo "$ngx_compression_modules" \
             | sed "s/ $ngx_module_name//")

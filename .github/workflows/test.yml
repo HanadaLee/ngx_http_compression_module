@@ -127,12 +127,6 @@ jobs:
           repository: HanadaLee/ngx_expr_module
           ref: 1.0.2
           path: .ci/ngx_expr_module
-      - uses: actions/checkout@v6
-        if: matrix.standalone != 1
-        with:
-          repository: HanadaLee/ngx_http_compression_normalize_module
-          ref: 1.0.0
-          path: .ci/normalize
       - name: Build and test
         env:
           TEST_NGINX_EXPR: ${{ matrix.expr }}

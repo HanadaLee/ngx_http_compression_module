@@ -52,6 +52,11 @@ http {
         ssl_protocols TLSv1.3;
         root %%TESTDIR%%;
         location / {}
+        location /normalized/ {
+            alias %%TESTDIR%%/;
+            compression_normalize_accept_encoding gzip;
+            add_header X-Original $compression_original_accept_encoding;
+        }
         location /precompressed/ {
             compression off;
             compression_static always;
@@ -97,6 +102,7 @@ for my $request (@requests) {
 }
 check_fairness($t, $connection, $large, 3);
 check_static($t, $connection, $plain, 3);
+check_normalize($t, $connection, $plain, 3);
 undef $connection;
 $t->stop();
 like($t->read_file('error.log'), qr/compression filter yield/,

@@ -14,6 +14,7 @@ my @cases = (
     ['compression_static', 'compression_static on;'],
     ['decompression_filter', 'decompression on;'],
     ['compression_vary_filter', 'compression_vary on;'],
+    ['compression_normalize', 'compression_normalize_accept_encoding gzip;'],
 );
 for my $case (@cases) {
     my ($module, $directive) = @$case;

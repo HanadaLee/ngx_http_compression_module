@@ -18,18 +18,6 @@ $t->write_file('body.txt', $plain);
 my $compressed;
 gzip \$plain => \$compressed or die "gzip fixture";
 $t->write_file('body.txt.gz', $compressed);
-my $aux = $ENV{TEST_NGINX_COMPRESSION_AUX} ? <<'EOF' : '';
-        location /normalize/ {
-            compression_normalize_accept_encoding br gzip;
-            alias %%TESTDIR%%/;
-        }
-        location /vary/ {
-            gzip_vary off;
-            compression_vary on;
-            proxy_pass http://127.0.0.1:8081/vary/;
-        }
-EOF
-
 my $config = <<'EOF';
 %%TEST_GLOBALS%%
 daemon off;
@@ -104,7 +92,15 @@ http {
             return 204;
         }
         location / {}
-__AUX__
+        location /normalize/ {
+            compression_normalize_accept_encoding br gzip;
+            alias %%TESTDIR%%/;
+        }
+        location /vary/ {
+            gzip_vary off;
+            compression_vary on;
+            proxy_pass http://127.0.0.1:8081/vary/;
+        }
     }
     server {
         listen 127.0.0.1:8081;
@@ -123,7 +119,6 @@ __AUX__
     }
 }
 EOF
-$config =~ s/__AUX__/$aux/;
 $t->write_file_expand('nginx.conf', $config);
 $t->run();
 
@@ -179,18 +174,16 @@ my $head = http("HEAD /body.txt HTTP/1.0\r\nHost: localhost\r\n"
     . "Accept-Encoding: gzip\r\n\r\n");
 unlike($head, qr/^Content-Encoding:/mi, 'HEAD not compressed');
 
-if ($ENV{TEST_NGINX_COMPRESSION_AUX}) {
-    check_response($t,
-        request('/normalize/body.txt', 'gzip;q=1, br;q=0.1'),
-        'br', $plain, 'normalize remains authoritative');
-    my $vary = request('/vary/body.txt', 'zstd');
-    check_response($t, $vary, 'zstd', $plain, 'independent Vary filter');
-    my @headers = $vary =~ /^Vary: (.*?)\r?$/gmi;
-    is(scalar @headers, 1, 'one merged Vary field');
-    like($headers[0], qr/Origin/i, 'original Vary retained');
-    like($headers[0], qr/X-Example/i, 'second original Vary retained');
-    like($headers[0], qr/Accept-Encoding/i, 'compression Vary appended');
-}
+check_response($t,
+    request('/normalize/body.txt', 'gzip;q=1, br;q=0.1'),
+    'br', $plain, 'normalize remains authoritative');
+my $vary = request('/vary/body.txt', 'zstd');
+check_response($t, $vary, 'zstd', $plain, 'independent Vary filter');
+my @headers = $vary =~ /^Vary: (.*?)\r?$/gmi;
+is(scalar @headers, 1, 'one merged Vary field');
+like($headers[0], qr/Origin/i, 'original Vary retained');
+like($headers[0], qr/X-Example/i, 'second original Vary retained');
+like($headers[0], qr/Accept-Encoding/i, 'compression Vary appended');
 
 $t->stop();
 unlike($t->read_file('error.log'), qr/\[(?:alert|emerg)\]|Sanitizer|runtime error:/,

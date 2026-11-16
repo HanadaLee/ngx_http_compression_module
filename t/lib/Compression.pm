@@ -10,7 +10,7 @@ use File::Basename qw/dirname/;
 use File::Spec;
 
 our @EXPORT = qw/request decoded check_response encodings decodings all_backends
-    write_config check_fairness prepare_static check_static/;
+    write_config check_fairness prepare_static check_static check_normalize/;
 
 sub encodings {
     return split /\s+/, $ENV{TEST_NGINX_COMPRESSION_ENCODINGS}
@@ -177,6 +177,33 @@ sub check_static {
         $response .= "Content-Encoding: $encoding\r\n" if defined $expected;
         is(decoded($t, "$response\r\n$body", $plain), $plain, "$name round trip");
     }
+}
+
+sub check_normalize {
+    my ($t, $connection, $plain, $version) = @_;
+    my $mode = $version == 2 ? 2 : 4;
+    my $scheme = $version == 2 ? 'http' : 'https';
+    my $accept = 'deflate;q=1, gzip;q=0.2';
+    my $sid = $connection->new_stream({ headers => [
+        { name => ':method', value => 'GET', mode => $mode },
+        { name => ':scheme', value => $scheme, mode => $mode },
+        { name => ':path', value => '/normalized/body.txt', mode => $mode },
+        { name => ':authority', value => 'localhost', mode => $mode },
+        { name => 'accept-encoding', value => $accept, mode => $mode },
+    ]});
+    my $frames = $connection->read(all => [{ sid => $sid, fin => 1 }]);
+    my ($header) = grep { $_->{type} eq 'HEADERS' && $_->{sid} == $sid } @$frames;
+    my $body = join '', map { $_->{data} }
+        grep { $_->{type} eq 'DATA' && $_->{sid} == $sid } @$frames;
+    is($header->{headers}->{':status'}, 200, "HTTP/$version normalized status");
+    is($header->{headers}->{'content-encoding'}, 'gzip',
+        "HTTP/$version uses the normalized encoding");
+    is($header->{headers}->{'x-original'}, $accept,
+        "HTTP/$version preserves the original header");
+    is($header->{headers}->{'vary'}, 'Accept-Encoding',
+        "HTTP/$version normalization preserves Vary");
+    is(decoded($t, "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\n\r\n$body", $plain),
+        $plain, "HTTP/$version normalized round trip");
 }
 
 1;
