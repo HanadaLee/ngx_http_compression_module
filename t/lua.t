@@ -13,9 +13,11 @@ plan skip_all => 'OpenResty is not enabled' unless $ENV{TEST_NGINX_OPENRESTY};
 
 my $t = Test::Nginx->new()->has(qw/http/);
 my $plain = 'Lua streaming response ' x 2048;
+my $large = 'Lua streaming response ' x 262144;
 write_config($t, <<'EOF');
 %%TEST_GLOBALS%%
 daemon off;
+error_log %%TESTDIR%%/error.log debug;
 events {}
 http {
     %%TEST_GLOBALS_HTTP%%
@@ -61,6 +63,12 @@ http {
                 ngx.print(" buffer")
             }
         }
+        location /large {
+            content_by_lua_block {
+                ngx.print(string.rep("Lua streaming response ", 262144))
+                ngx.flush(true)
+            }
+        }
     }
 }
 EOF
@@ -75,9 +83,13 @@ for my $encoding (encodings()) {
         "$encoding empty flush");
     check_response($t, request('/small', $encoding), $encoding, 'small buffer',
         "$encoding one-byte output buffer");
+    check_response($t, request('/large', $encoding), $encoding, $large,
+        "$encoding large Lua response");
 }
 
 $t->stop();
+like($t->read_file('error.log'), qr/compression filter yield/,
+    'Lua compression yields');
 unlike($t->read_file('error.log'), qr/\[(?:alert|emerg)\]|Sanitizer|runtime error:/,
     'no Lua filter lifecycle errors');
 undef $t;

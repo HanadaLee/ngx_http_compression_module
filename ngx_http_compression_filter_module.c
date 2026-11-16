@@ -44,6 +44,10 @@
 #define NGX_HTTP_COMPRESSION_MULTI_STATUS         207
 #define NGX_HTTP_COMPRESSION_NOT_ACCEPTABLE       406
 
+#define NGX_HTTP_COMPRESSION_INPUT_SIZE           (64 * 1024)
+#define NGX_HTTP_COMPRESSION_INPUT_LIMIT          (256 * 1024)
+#define NGX_HTTP_COMPRESSION_CALLS                64
+
 #define NGX_HTTP_COMPRESSION_ZSTD_CACHE_SIZE      4
 #define NGX_HTTP_COMPRESSION_ZSTD_CACHE_MAX       (16 * 1024 * 1024)
 
@@ -132,6 +136,7 @@ struct ngx_http_compression_ctx_s {
     ngx_http_request_t                    *request;
     ngx_http_compression_conf_t           *conf;
     const ngx_http_compression_encoder_t  *encoder;
+    ngx_event_t                           *event;
 
     ngx_chain_t                           *in;
     ngx_chain_t                           *out;
@@ -145,6 +150,9 @@ struct ngx_http_compression_ctx_s {
     off_t                                  bytes_in;
     off_t                                  bytes_out;
     size_t                                 postponed;
+    size_t                                 input;
+    size_t                                 limit;
+    ngx_uint_t                             calls;
     ngx_uint_t                             bufs;
     ngx_uint_t                             encoding;
     ngx_uint_t                             operation;
@@ -208,6 +216,8 @@ static void ngx_http_compression_release_input(ngx_http_compression_ctx_t *ctx);
 static ngx_int_t ngx_http_compression_get_buffer(
     ngx_http_compression_ctx_t *ctx);
 static ngx_int_t ngx_http_compression_output(ngx_http_compression_ctx_t *ctx);
+static ngx_int_t ngx_http_compression_post(ngx_http_compression_ctx_t *ctx);
+static void ngx_http_compression_handler(ngx_event_t *ev);
 static void ngx_http_compression_cleanup(void *data);
 
 #if (NGX_HTTP_COMPRESSION_HAVE_ZLIB)
@@ -666,6 +676,7 @@ static const ngx_http_compression_encoder_t
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 static u_char                           ngx_http_compression_empty;
+static ngx_buf_t                        ngx_http_compression_empty_buf;
 
 #if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
 
@@ -828,6 +839,8 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
     ctx->content_length = r->headers_out.content_length_n;
     ctx->buffering = (conf->postpone != 0);
     ctx->last_out = &ctx->out;
+    ctx->limit = NGX_HTTP_COMPRESSION_INPUT_LIMIT;
+    ctx->calls = NGX_HTTP_COMPRESSION_CALLS;
 
     cln->handler = ngx_http_compression_cleanup;
     cln->data = ctx;
@@ -859,7 +872,8 @@ static ngx_int_t
 ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
     off_t                        before_in, before_out;
-    ngx_int_t                    rc, blocked;
+    ngx_int_t                    rc;
+    ngx_uint_t                   blocked, yield;
     ngx_chain_t                 *cl;
     ngx_http_compression_ctx_t  *ctx;
 
@@ -870,11 +884,15 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     }
 
     if (ngx_http_compression_queue(ctx, in) != NGX_OK) {
-        return NGX_ERROR;
+        goto failed;
     }
 
     if (in) {
         r->connection->buffered |= NGX_HTTP_GZIP_BUFFERED;
+    }
+
+    if (ctx->event && ctx->event->posted) {
+        return NGX_AGAIN;
     }
 
     if (ctx->buffering) {
@@ -883,7 +901,7 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     if (!ctx->initialized) {
         if (ctx->encoder->init(ctx) != NGX_OK) {
-            return NGX_ERROR;
+            goto failed;
         }
 
         ctx->initialized = 1;
@@ -891,6 +909,7 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     for ( ;; ) {
         blocked = 0;
+        yield = 0;
 
         for ( ;; ) {
             if (ctx->in_buf == NULL) {
@@ -921,10 +940,15 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 }
             }
 
+            if (ctx->limit == 0 || ctx->calls == 0) {
+                yield = 1;
+                break;
+            }
+
             rc = ngx_http_compression_get_buffer(ctx);
 
             if (rc == NGX_ERROR) {
-                return NGX_ERROR;
+                goto failed;
             }
 
             if (rc == NGX_AGAIN) {
@@ -932,13 +956,20 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 break;
             }
 
+            ctx->input = ngx_min((size_t) ngx_buf_size(ctx->in_buf),
+                                 ctx->limit);
+            ctx->input = ngx_min(ctx->input, NGX_HTTP_COMPRESSION_INPUT_SIZE);
+
             before_in = ctx->bytes_in;
             before_out = ctx->bytes_out;
 
             rc = ctx->encoder->process(ctx);
 
+            ctx->limit -= (size_t) (ctx->bytes_in - before_in);
+            ctx->calls--;
+
             if (rc == NGX_ERROR) {
-                return NGX_ERROR;
+                goto failed;
             }
 
             if (rc == NGX_OK
@@ -961,12 +992,12 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 }
 
                 if (ngx_http_compression_output(ctx) != NGX_OK) {
-                    return NGX_ERROR;
+                    goto failed;
                 }
 
             } else if (ctx->out_buf->last == ctx->out_buf->end) {
                 if (ngx_http_compression_output(ctx) != NGX_OK) {
-                    return NGX_ERROR;
+                    goto failed;
                 }
             }
 
@@ -978,7 +1009,15 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             {
                 ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
                               "compression encoder made no progress");
-                return NGX_ERROR;
+                goto failed;
+            }
+
+            if (rc == NGX_AGAIN && ngx_buf_size(ctx->in_buf) == 0) {
+
+                /* The caller may reuse the buffer before we resume. */
+
+                ngx_http_compression_release_input(ctx);
+                ctx->in_buf = &ngx_http_compression_empty_buf;
             }
 
             if (ctx->done) {
@@ -986,30 +1025,40 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             }
         }
 
-        if (ctx->conf->no_buffer && ctx->in_buf == NULL && ctx->in == NULL
-            && ctx->out_buf && ctx->out_buf->last != ctx->out_buf->pos)
+        if (ctx->out_buf && ctx->out_buf->last != ctx->out_buf->pos
+            && (yield
+                || (ctx->conf->no_buffer
+                    && ctx->in_buf == NULL && ctx->in == NULL)))
         {
             if (ngx_http_compression_output(ctx) != NGX_OK) {
-                return NGX_ERROR;
+                goto failed;
             }
         }
 
-        if (ctx->out == NULL && ctx->busy == NULL) {
-            return NGX_OK;
-        }
+        rc = NGX_OK;
 
-        rc = ngx_http_next_body_filter(r, ctx->out);
+        if (ctx->out || ctx->busy) {
+            rc = ngx_http_next_body_filter(r, ctx->out);
 
-        if (rc == NGX_ERROR) {
-            return NGX_ERROR;
-        }
+            if (rc == NGX_ERROR) {
+                goto failed;
+            }
 
-        ngx_chain_update_chains(r->pool, &ctx->free, &ctx->busy, &ctx->out,
+            ngx_chain_update_chains(r->pool, &ctx->free, &ctx->busy, &ctx->out,
                            (ngx_buf_tag_t) &ngx_http_compression_filter_module);
-        ctx->last_out = &ctx->out;
+            ctx->last_out = &ctx->out;
+        }
 
         if (ctx->done) {
             return rc;
+        }
+
+        if (yield) {
+            if (ngx_http_compression_post(ctx) == NGX_ERROR) {
+                goto failed;
+            }
+
+            return NGX_AGAIN;
         }
 
         if (!blocked) {
@@ -1020,6 +1069,15 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             return NGX_AGAIN;
         }
     }
+
+failed:
+
+    ctx->success = 0;
+    ctx->done = 1;
+    ngx_http_compression_cleanup(ctx);
+    r->connection->buffered &= ~NGX_HTTP_GZIP_BUFFERED;
+
+    return NGX_ERROR;
 }
 
 
@@ -1537,10 +1595,63 @@ ngx_http_compression_output(ngx_http_compression_ctx_t *ctx)
 }
 
 
+static ngx_int_t
+ngx_http_compression_post(ngx_http_compression_ctx_t *ctx)
+{
+    ngx_http_request_t  *r;
+
+    r = ctx->request;
+
+    if (ctx->event == NULL) {
+        ctx->event = ngx_pcalloc(r->pool, sizeof(ngx_event_t));
+        if (ctx->event == NULL) {
+            return NGX_ERROR;
+        }
+
+        ctx->event->data = ctx;
+        ctx->event->handler = ngx_http_compression_handler;
+        ctx->event->log = r->connection->log;
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "compression filter yield");
+
+    r->connection->buffered |= NGX_HTTP_GZIP_BUFFERED;
+    ngx_post_event(ctx->event, &ngx_posted_next_events);
+
+    return NGX_AGAIN;
+}
+
+
+static void
+ngx_http_compression_handler(ngx_event_t *ev)
+{
+    ngx_connection_t            *c;
+    ngx_http_request_t          *r;
+    ngx_http_compression_ctx_t  *ctx;
+
+    ctx = ev->data;
+    r = ctx->request;
+    c = r->connection;
+
+    ctx->limit = NGX_HTTP_COMPRESSION_INPUT_LIMIT;
+    ctx->calls = NGX_HTTP_COMPRESSION_CALLS;
+
+    ngx_http_set_log_request(c->log, r);
+
+    r->write_event_handler(r);
+    ngx_http_run_posted_requests(c);
+}
+
+
 static void
 ngx_http_compression_cleanup(void *data)
 {
     ngx_http_compression_ctx_t  *ctx = data;
+
+    if (ctx->event && ctx->event->posted) {
+        ngx_delete_posted_event(ctx->event);
+    }
 
     ctx->encoder->close(ctx);
     ctx->initialized = 0;
@@ -1627,7 +1738,7 @@ ngx_http_compression_zlib_process(ngx_http_compression_ctx_t *ctx)
         goto output;
     }
 
-    in = (u_int) ngx_min(ngx_buf_size(ctx->in_buf), UINT_MAX);
+    in = (u_int) ctx->input;
     out = (u_int) ngx_min(ctx->out_buf->end - ctx->out_buf->last, UINT_MAX);
 
     zctx->stream.next_in = in ? ctx->in_buf->pos
@@ -1837,14 +1948,17 @@ ngx_http_compression_brotli_process(ngx_http_compression_ctx_t *ctx)
 
     bctx = (ngx_http_compression_brotli_ctx_t *) ctx;
 
-    in = ngx_buf_size(ctx->in_buf);
+    in = ctx->input;
     out = ctx->out_buf->end - ctx->out_buf->last;
     available_in = in;
     available_out = out;
     next_in = in ? ctx->in_buf->pos : &ngx_http_compression_empty;
     next_out = ctx->out_buf->last;
 
-    if (ctx->operation == NGX_HTTP_COMPRESSION_FINISH) {
+    if ((off_t) in < ngx_buf_size(ctx->in_buf)) {
+        operation = BROTLI_OPERATION_PROCESS;
+
+    } else if (ctx->operation == NGX_HTTP_COMPRESSION_FINISH) {
         operation = BROTLI_OPERATION_FINISH;
 
     } else if (ctx->operation == NGX_HTTP_COMPRESSION_FLUSH) {
@@ -1875,7 +1989,8 @@ ngx_http_compression_brotli_process(ngx_http_compression_ctx_t *ctx)
         return BrotliEncoderIsFinished(bctx->state) ? NGX_OK : NGX_AGAIN;
     }
 
-    return (available_in == 0 && !BrotliEncoderHasMoreOutput(bctx->state))
+    return (ngx_buf_size(ctx->in_buf) == 0
+            && !BrotliEncoderHasMoreOutput(bctx->state))
            ? NGX_OK : NGX_AGAIN;
 }
 
@@ -1988,14 +2103,17 @@ ngx_http_compression_zstd_process(ngx_http_compression_ctx_t *ctx)
 
     zctx = (ngx_http_compression_zstd_ctx_t *) ctx;
 
-    in.size = ngx_buf_size(ctx->in_buf);
+    in.size = ctx->input;
     in.src = in.size ? ctx->in_buf->pos : &ngx_http_compression_empty;
     in.pos = 0;
     out.dst = ctx->out_buf->last;
     out.size = ctx->out_buf->end - ctx->out_buf->last;
     out.pos = 0;
 
-    if (ctx->operation == NGX_HTTP_COMPRESSION_FINISH) {
+    if ((off_t) in.size < ngx_buf_size(ctx->in_buf)) {
+        operation = ZSTD_e_continue;
+
+    } else if (ctx->operation == NGX_HTTP_COMPRESSION_FINISH) {
         operation = ZSTD_e_end;
 
     } else if (ctx->operation == NGX_HTTP_COMPRESSION_FLUSH) {
@@ -2020,6 +2138,10 @@ ngx_http_compression_zstd_process(ngx_http_compression_ctx_t *ctx)
     ctx->out_buf->last += out.pos;
     ctx->bytes_in += in.pos;
     ctx->bytes_out += out.pos;
+
+    if (ngx_buf_size(ctx->in_buf) != 0) {
+        return NGX_AGAIN;
+    }
 
     if (ctx->operation == NGX_HTTP_COMPRESSION_PROCESS) {
         return (in.pos == in.size && out.pos < out.size) ? NGX_OK : NGX_AGAIN;

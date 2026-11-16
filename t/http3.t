@@ -13,6 +13,8 @@ use Compression;
 my $t = Test::Nginx->new()->has(qw/http http_v3 cryptx/);
 my $plain = 'multiplexed compression ' x 1024;
 $t->write_file('body.txt', $plain);
+my $large = 'fair compression response ' x 262144;
+$t->write_file('fair.txt', $large);
 my $pid = fork();
 die "fork: $!" unless defined $pid;
 if (!$pid) {
@@ -29,6 +31,7 @@ BAIL_OUT('cannot create test certificate') if $?;
 write_config($t, <<'EOF');
 %%TEST_GLOBALS%%
 daemon off;
+error_log %%TESTDIR%%/error.log debug;
 events {}
 http {
     %%TEST_GLOBALS_HTTP%%
@@ -47,6 +50,10 @@ http {
         ssl_protocols TLSv1.3;
         root %%TESTDIR%%;
         location / {}
+        location /ping {
+            compression off;
+            return 200 pong;
+        }
     }
 }
 EOF
@@ -79,8 +86,11 @@ for my $request (@requests) {
     is(decoded($t, $response, $plain), $plain,
         "$encoding HTTP/3 multiplexed round trip");
 }
+check_fairness($t, $connection, $large, 3);
 undef $connection;
 $t->stop();
+like($t->read_file('error.log'), qr/compression filter yield/,
+    'HTTP/3 compression yields');
 unlike($t->read_file('error.log'), qr/\[(?:alert|emerg)\]|Sanitizer|runtime error:/,
     'no protocol lifecycle errors');
 undef $t;

@@ -10,7 +10,7 @@ use File::Basename qw/dirname/;
 use File::Spec;
 
 our @EXPORT = qw/request decoded check_response encodings all_backends
-    write_config/;
+    write_config check_fairness/;
 
 sub encodings {
     return split /\s+/, $ENV{TEST_NGINX_COMPRESSION_ENCODINGS}
@@ -67,6 +67,59 @@ sub check_response {
         unlike($response, qr/^Content-Encoding:/mi, "$name identity");
     }
     is(decoded($t, $response, $plain), $plain, "$name round trip");
+}
+
+sub check_fairness {
+    my ($t, $connection, $plain, $version) = @_;
+    my $mode = $version == 2 ? 2 : 4;
+    my $scheme = $version == 2 ? 'http' : 'https';
+    my $stream = sub {
+        my ($path, $encoding) = @_;
+        return $connection->new_stream({ headers => [
+            { name => ':method', value => 'GET', mode => $mode },
+            { name => ':scheme', value => $scheme, mode => $mode },
+            { name => ':path', value => $path, mode => $mode },
+            { name => ':authority', value => 'localhost', mode => $mode },
+            { name => 'accept-encoding', value => $encoding, mode => $mode },
+        ]});
+    };
+
+    for my $encoding (encodings()) {
+        $connection->h2_window(16 * 1024 * 1024) if $version == 2;
+        my $large = $stream->('/fair.txt', $encoding);
+        my $small = $stream->('/ping', 'identity');
+        my $frames = $connection->read(all => [
+            { sid => $large, fin => 1 }, { sid => $small, fin => 1 }
+        ]);
+        my @finished = map { $_->{sid} }
+            grep { $_->{flags} & 1 && ($_->{sid} == $large || $_->{sid} == $small) }
+            @$frames;
+        is($finished[0], $small,
+            "$encoding HTTP/$version small response finishes first");
+        my ($header) = grep { $_->{type} eq 'HEADERS' && $_->{sid} == $large }
+            @$frames;
+        is($header->{headers}->{'content-encoding'}, $encoding,
+            "$encoding HTTP/$version large encoding");
+        my $body = join '', map { $_->{data} }
+            grep { $_->{type} eq 'DATA' && $_->{sid} == $large } @$frames;
+        is(decoded($t, "HTTP/1.1 200 OK\r\nContent-Encoding: $encoding\r\n\r\n$body",
+            $plain), $plain, "$encoding HTTP/$version resumed round trip");
+
+        my $cancel = $stream->('/fair.txt', $encoding);
+        $connection->read(all => [{ sid => $cancel, type => 'DATA' }]);
+        if ($version == 2) {
+            $connection->h2_rst($cancel, 8);
+        } else {
+            $connection->reset_stream($cancel, 0x10c);
+            $connection->stop_sending($cancel, 0x10c);
+        }
+        my $ping = $stream->('/ping', 'identity');
+        $frames = $connection->read(all => [{ sid => $ping, fin => 1 }]);
+        my ($reply) = grep { $_->{type} eq 'HEADERS' && $_->{sid} == $ping }
+            @$frames;
+        is($reply->{headers}->{':status'}, 200,
+            "$encoding HTTP/$version survives stream cancellation");
+    }
 }
 
 1;

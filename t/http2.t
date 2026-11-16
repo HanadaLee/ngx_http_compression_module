@@ -13,10 +13,13 @@ use Compression;
 my $t = Test::Nginx->new()->has(qw/http http_v2 /);
 my $plain = 'multiplexed compression ' x 1024;
 $t->write_file('body.txt', $plain);
+my $large = 'fair compression response ' x 262144;
+$t->write_file('fair.txt', $large);
 
 write_config($t, <<'EOF');
 %%TEST_GLOBALS%%
 daemon off;
+error_log %%TESTDIR%%/error.log debug;
 events {}
 http {
     %%TEST_GLOBALS_HTTP%%
@@ -32,6 +35,10 @@ http {
         http2 on;
         root %%TESTDIR%%;
         location / {}
+        location /ping {
+            compression off;
+            return 200 pong;
+        }
     }
 }
 EOF
@@ -64,8 +71,11 @@ for my $request (@requests) {
     is(decoded($t, $response, $plain), $plain,
         "$encoding HTTP/2 multiplexed round trip");
 }
+check_fairness($t, $connection, $large, 2);
 undef $connection;
 $t->stop();
+like($t->read_file('error.log'), qr/compression filter yield/,
+    'HTTP/2 compression yields');
 unlike($t->read_file('error.log'), qr/\[(?:alert|emerg)\]|Sanitizer|runtime error:/,
     'no protocol lifecycle errors');
 undef $t;
