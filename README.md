@@ -22,7 +22,7 @@ http {
     compression_proxied any;
 
     compression_gzip_level 1;
-    compression_brotli_level 6;
+    compression_brotli_level 1;
     compression_zstd_level 1;
     compression_deflate_level 1;
 
@@ -233,7 +233,7 @@ Sets the gzip hash table size, a power of two from `512` to `128k`.
 ### compression_brotli_level
 
 **Syntax:** `compression_brotli_level level;`
-**Default:** `compression_brotli_level 6;`
+**Default:** `compression_brotli_level 1;`
 **Context:** `http`, `server`, `location`, `when`
 
 Sets a Brotli compression `level` of a response. Acceptable values are in the range from 0 to 11.

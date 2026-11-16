@@ -2114,7 +2114,7 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     if (ngx_conf_merge_expr_num_value(cf, &conf->brotli_level,
-                                      prev->brotli_level, 6) != NGX_OK)
+                                      prev->brotli_level, 1) != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
@@ -2155,7 +2155,7 @@ ngx_http_compression_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     if (conf->brotli_level == NGX_MAX_INT_T_VALUE) {
         conf->brotli_level = prev->brotli_level == NGX_MAX_INT_T_VALUE
-                             ? 6 : prev->brotli_level;
+                             ? 1 : prev->brotli_level;
     }
 
 #endif
