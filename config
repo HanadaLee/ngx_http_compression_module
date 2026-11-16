@@ -1,0 +1,117 @@
+# Copyright (C) Hanada
+
+ngx_addon_name=ngx_http_compression_filter_module
+
+ngx_compression_incs=
+ngx_compression_libs=
+
+for ngx_compression_library in zlib brotli zstd
+do
+    ngx_feature_run=no
+    ngx_feature_path=
+
+    case $ngx_compression_library in
+        zlib)
+            ngx_compression_package=zlib
+            ngx_feature="zlib compression library"
+            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_ZLIB
+            ngx_feature_incs="#include <zlib.h>"
+            ngx_feature_libs="-lz"
+            ngx_feature_test="z_stream  stream = {0};
+                              deflateInit2(&stream, 1, Z_DEFLATED,
+                                           31, 8, Z_DEFAULT_STRATEGY);
+                              deflateEnd(&stream);"
+            ;;
+
+        brotli)
+            ngx_compression_package=libbrotlienc
+            ngx_feature="Brotli compression library"
+            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_BROTLI
+            ngx_feature_incs="#include <brotli/encode.h>"
+            ngx_feature_libs="-lbrotlienc -lbrotlicommon"
+            ngx_feature_test="BrotliEncoderState  *state;
+
+                              state = BrotliEncoderCreateInstance(0, 0, 0);
+                              BrotliEncoderDestroyInstance(state);"
+            ;;
+
+        zstd)
+            ngx_compression_package=libzstd
+            ngx_feature="Zstd compression library"
+            ngx_feature_name=NGX_HTTP_COMPRESSION_HAVE_ZSTD
+            ngx_feature_incs="#include <zstd.h>"
+            ngx_feature_libs="-lzstd"
+            ngx_feature_test="ZSTD_CCtx       *state;
+                              ZSTD_inBuffer   in = {0, 0, 0};
+                              ZSTD_outBuffer  out = {0, 0, 0};
+
+                              state = ZSTD_createCCtx();
+                              ZSTD_CCtx_setParameter(state,
+                                      ZSTD_c_compressionLevel, ZSTD_minCLevel());
+                              ZSTD_compressStream2(state, &out, &in, ZSTD_e_end);
+                              ZSTD_freeCCtx(state);"
+            ;;
+    esac
+
+    if pkg-config --exists $ngx_compression_package 2>/dev/null; then
+        ngx_feature_path=$(pkg-config --cflags-only-I $ngx_compression_package \
+                           | sed 's/-I//g')
+        ngx_feature_libs=$(pkg-config --libs $ngx_compression_package)
+    fi
+
+    . auto/feature
+
+    if [ "$ngx_found" = yes ]; then
+        ngx_compression_incs="$ngx_compression_incs $ngx_feature_path"
+        ngx_compression_libs="$ngx_compression_libs $ngx_feature_libs"
+    fi
+done
+
+if [ -z "$ngx_compression_libs" ]; then
+    cat << END
+
+$0: error: ngx_http_compression_filter_module requires at least one of
+zlib, libbrotlienc or libzstd; set PKG_CONFIG_PATH for custom installations
+
+END
+    exit 1
+fi
+
+have=NGX_HTTP_COMPRESSION . auto/have
+have=NGX_HTTP_GZIP . auto/have
+
+ngx_module_type=HTTP_FILTER
+ngx_module_name=ngx_http_compression_filter_module
+ngx_module_incs="$ngx_compression_incs"
+ngx_module_deps=
+ngx_module_srcs="$ngx_addon_dir/ngx_http_compression_filter_module.c"
+ngx_module_libs="$ngx_compression_libs"
+ngx_module_order="$ngx_module_name \
+                  ngx_http_postpone_filter_module \
+                  ngx_http_ssi_filter_module \
+                  ngx_http_charset_filter_module \
+                  ngx_http_xslt_filter_module \
+                  ngx_http_image_filter_module \
+                  ngx_http_sub_filter_module \
+                  ngx_http_addition_filter_module \
+                  ngx_http_gunzip_filter_module \
+                  ngx_http_userid_filter_module \
+                  ngx_http_headers_filter_module \
+                  ngx_http_copy_filter_module \
+                  ngx_http_range_body_filter_module \
+                  ngx_http_not_modified_filter_module \
+                  ngx_http_slice_filter_module"
+
+. auto/module
+
+if [ "$ngx_module_link" != DYNAMIC ]; then
+    if [ "$HTTP_GZIP" = YES ]; then
+        ngx_compression_after=ngx_http_gzip_filter_module
+    else
+        ngx_compression_after=ngx_http_range_header_filter_module
+    fi
+
+    HTTP_FILTER_MODULES=$(echo "$HTTP_FILTER_MODULES" \
+        | sed "s/ $ngx_module_name//" \
+        | sed "s/$ngx_compression_after/$ngx_compression_after $ngx_module_name/")
+fi
