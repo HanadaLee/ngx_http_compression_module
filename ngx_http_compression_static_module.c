@@ -370,6 +370,7 @@ ngx_http_compression_static_create_conf(ngx_conf_t *cf)
     conf->enable = NGX_CONF_UNSET_UINT;
     conf->ignore_qvalue = NGX_CONF_UNSET;
 #endif
+
     conf->encodings = NGX_CONF_UNSET_PTR;
 
     return conf;

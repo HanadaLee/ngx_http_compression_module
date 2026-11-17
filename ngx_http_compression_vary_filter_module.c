@@ -102,7 +102,6 @@ ngx_http_compression_vary_header_filter(ngx_http_request_t *r)
     header = part->elts;
 
     for (i = 0; /* void */; i++) {
-
         if (i >= part->nelts) {
             if (part->next == NULL) {
                 break;
@@ -121,7 +120,6 @@ ngx_http_compression_vary_header_filter(ngx_http_request_t *r)
             && ngx_strncasecmp(header[i].key.data,
                                (u_char *) "Vary", 4) == 0)
         {
-
             p = header[i].value.data;
             last = p + header[i].value.len;
 

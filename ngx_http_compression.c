@@ -14,7 +14,7 @@
 static ngx_int_t ngx_http_compression_qvalue(u_char *p, u_char *last);
 
 
-ngx_uint_t ngx_http_compression_encode_mask =
+ngx_uint_t  ngx_http_compression_encode_mask =
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI)
     (1 << NGX_HTTP_COMPRESSION_BROTLI) |
 #endif
@@ -23,7 +23,7 @@ ngx_uint_t ngx_http_compression_encode_mask =
 #endif
     (1 << NGX_HTTP_COMPRESSION_GZIP) | (1 << NGX_HTTP_COMPRESSION_DEFLATE);
 
-ngx_uint_t ngx_http_compression_decode_mask =
+ngx_uint_t  ngx_http_compression_decode_mask =
 #if (NGX_HTTP_COMPRESSION_HAVE_BROTLI_DECODER)
     (1 << NGX_HTTP_COMPRESSION_BROTLI) |
 #endif

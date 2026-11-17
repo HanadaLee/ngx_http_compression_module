@@ -40,6 +40,7 @@ typedef struct {
     ngx_flag_t                         force;
     ngx_http_compression_encodings_t  *encodings;
 #endif
+
     ngx_bufs_t                         bufs;
 } ngx_http_decompression_conf_t;
 
@@ -288,7 +289,7 @@ static const ngx_http_decompression_decoder_t
 
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
-static ngx_buf_t                        ngx_http_decompression_empty_buf;
+static ngx_buf_t                         ngx_http_decompression_empty_buf;
 
 
 static ngx_int_t
@@ -990,6 +991,7 @@ ngx_http_decompression_create_conf(ngx_conf_t *cf)
     conf->enable = NGX_CONF_UNSET;
     conf->force = NGX_CONF_UNSET;
 #endif
+
     conf->encodings = NGX_CONF_UNSET_PTR;
 
     return conf;

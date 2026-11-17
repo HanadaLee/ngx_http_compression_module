@@ -199,8 +199,7 @@ ngx_http_compression_normalize_merge_conf(ngx_conf_t *cf,
 
 #if (NGX_EXPR)
     if (ngx_conf_merge_expr_ptr_value(cf, &conf->combinations,
-                                      prev->combinations, NULL)
-        != NGX_OK)
+                                      prev->combinations, NULL) != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }

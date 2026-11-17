@@ -606,8 +606,8 @@ static const ngx_http_compression_encoder_t
 
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
-static u_char                           ngx_http_compression_empty;
-static ngx_buf_t                        ngx_http_compression_empty_buf;
+static u_char                            ngx_http_compression_empty;
+static ngx_buf_t                         ngx_http_compression_empty_buf;
 
 #if (NGX_HTTP_COMPRESSION_HAVE_ZSTD)
 
