@@ -45,7 +45,7 @@ http {
         location /sub/ {
             alias %%TESTDIR%%/;
             sub_filter_types *;
-            sub_filter hello HELLO;
+            sub_filter hello HELLO_LONGER;
             sub_filter_once off;
         }
         location /cache/ {
@@ -124,7 +124,7 @@ $t->run();
 
 for my $encoding (qw/gzip br zstd deflate/) {
     my $changed = $plain;
-    $changed =~ s/hello/HELLO/g;
+    $changed =~ s/hello/HELLO_LONGER/g;
     check_response($t, request('/sub/body.txt', $encoding), $encoding, $changed,
         "$encoding after substitution");
     check_response($t, request('/cache/body.txt', $encoding), $encoding, $plain,

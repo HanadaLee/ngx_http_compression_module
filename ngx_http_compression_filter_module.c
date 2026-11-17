@@ -1670,6 +1670,17 @@ ngx_http_compression_zstd_init(ngx_http_compression_ctx_t *ctx)
 
 #endif
 
+    if (ctx->content_length >= 0) {
+        rc = ZSTD_CCtx_setPledgedSrcSize(zctx->state,
+                                         (uint64_t) ctx->content_length);
+        if (ZSTD_isError(rc)) {
+            ngx_log_error(NGX_LOG_ALERT, ctx->request->connection->log, 0,
+                          "ZSTD_CCtx_setPledgedSrcSize() failed: %s",
+                          ZSTD_getErrorName(rc));
+            return NGX_ERROR;
+        }
+    }
+
     return NGX_OK;
 }
 

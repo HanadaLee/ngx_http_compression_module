@@ -97,6 +97,7 @@ for my $case (@requests) {
     close $probe;
     is($?, 0, 'libzstd accepts frame header');
     my $frame = decode_json($json);
+    is($frame->{content_size}, length($plain), "$path exact content size");
     cmp_ok($frame->{window_size}, '<=', $window, "$path window limit");
 }
 

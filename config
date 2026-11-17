@@ -75,6 +75,7 @@ do
                               state = ZSTD_createCCtx();
                               ZSTD_CCtx_setParameter(state,
                                       ZSTD_c_compressionLevel, ZSTD_minCLevel());
+                              ZSTD_CCtx_setPledgedSrcSize(state, 0);
                               ZSTD_compressStream2(state, &out, &in, ZSTD_e_end);
                               ZSTD_freeCCtx(state);"
             ;;

@@ -30,5 +30,9 @@ library.ZSTD_getFrameHeader.restype = ctypes.c_size_t
 header = FrameHeader()
 if library.ZSTD_getFrameHeader(ctypes.byref(header), data, len(data)) != 0:
     raise ValueError("incomplete or invalid zstd frame header")
-print(json.dumps({"window_size": header.window_size,
+content_size = header.content_size
+if content_size == (1 << 64) - 1:
+    content_size = None
+print(json.dumps({"content_size": content_size,
+                  "window_size": header.window_size,
                   "block_size": header.block_size}))
