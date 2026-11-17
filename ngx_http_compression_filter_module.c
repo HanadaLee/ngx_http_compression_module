@@ -4,6 +4,7 @@
  * Copyright (C) Nginx, Inc.
  * Copyright (C) Google Inc.
  * Copyright (C) Alex Zhang
+ * Copyright (C) 2026 Thijs Eilander
  * Copyright (C) Hanada
  */
 
@@ -121,6 +122,7 @@ struct ngx_http_compression_ctx_s {
     ngx_event_t                           *event;
 
     ngx_chain_t                           *in;
+    ngx_chain_t                          **last_in;
     ngx_chain_t                           *out;
     ngx_chain_t                          **last_out;
     ngx_chain_t                           *free;
@@ -764,6 +766,7 @@ ngx_http_compression_header_filter(ngx_http_request_t *r)
     ctx->level = level;
     ctx->content_length = r->headers_out.content_length_n;
     ctx->buffering = (conf->postpone != 0);
+    ctx->last_in = &ctx->in;
     ctx->last_out = &ctx->out;
     ctx->limit = NGX_HTTP_COMPRESSION_INPUT_LIMIT;
     ctx->calls = NGX_HTTP_COMPRESSION_CALLS;
@@ -809,12 +812,16 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         return ngx_http_next_body_filter(r, in);
     }
 
-    if (ngx_http_compression_queue(ctx, in) != NGX_OK) {
-        goto failed;
-    }
-
     if (in) {
         r->connection->buffered |= NGX_HTTP_GZIP_BUFFERED;
+    }
+
+    if (ctx->buffering || (ctx->event && ctx->event->posted)) {
+        if (ngx_http_compression_queue(ctx, in) != NGX_OK) {
+            goto failed;
+        }
+
+        in = NULL;
     }
 
     if (ctx->event && ctx->event->posted) {
@@ -825,28 +832,37 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         return NGX_OK;
     }
 
-    if (!ctx->initialized) {
-        if (ctx->encoder->init(ctx) != NGX_OK) {
-            goto failed;
-        }
-
-        ctx->initialized = 1;
-    }
-
     for ( ;; ) {
         blocked = 0;
         yield = 0;
 
         for ( ;; ) {
             if (ctx->in_buf == NULL) {
-                if (ctx->in == NULL) {
+                if (ctx->in) {
+                    cl = ctx->in;
+                    ctx->in = cl->next;
+                    ctx->in_buf = cl->buf;
+                    ngx_free_chain(r->pool, cl);
+
+                    if (ctx->in == NULL) {
+                        ctx->last_in = &ctx->in;
+                    }
+
+                } else if (in) {
+                    ctx->in_buf = in->buf;
+                    in = in->next;
+
+                } else {
                     break;
                 }
 
-                cl = ctx->in;
-                ctx->in = cl->next;
-                ctx->in_buf = cl->buf;
-                ngx_free_chain(r->pool, cl);
+                if (ngx_buf_size(ctx->in_buf)
+                    && !ngx_buf_in_memory(ctx->in_buf))
+                {
+                    ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
+                                  "compression filter received a file buffer");
+                    goto failed;
+                }
 
                 if (ctx->in_buf->last_buf) {
                     ctx->operation = NGX_HTTP_COMPRESSION_FINISH;
@@ -869,6 +885,14 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             if (ctx->limit == 0 || ctx->calls == 0) {
                 yield = 1;
                 break;
+            }
+
+            if (!ctx->initialized) {
+                if (ctx->encoder->init(ctx) != NGX_OK) {
+                    goto failed;
+                }
+
+                ctx->initialized = 1;
             }
 
             rc = ngx_http_compression_get_buffer(ctx);
@@ -912,7 +936,7 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 } else {
                     ctx->out_buf->flush = 1;
 
-                    if (ctx->in == NULL) {
+                    if (ctx->in == NULL && in == NULL) {
                         r->connection->buffered &= ~NGX_HTTP_GZIP_BUFFERED;
                     }
                 }
@@ -954,7 +978,7 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         if (ctx->out_buf && ctx->out_buf->last != ctx->out_buf->pos
             && (yield
                 || (ctx->conf->no_buffer
-                    && ctx->in_buf == NULL && ctx->in == NULL)))
+                    && ctx->in_buf == NULL && ctx->in == NULL && in == NULL)))
         {
             if (ngx_http_compression_output(ctx) != NGX_OK) {
                 goto failed;
@@ -980,6 +1004,10 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
 
         if (yield) {
+            if (ngx_http_compression_queue(ctx, in) != NGX_OK) {
+                goto failed;
+            }
+
             if (ngx_http_compression_post(ctx) == NGX_ERROR) {
                 goto failed;
             }
@@ -992,6 +1020,10 @@ ngx_http_compression_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
 
         if (ctx->free == NULL) {
+            if (ngx_http_compression_queue(ctx, in) != NGX_OK) {
+                goto failed;
+            }
+
             return NGX_AGAIN;
         }
     }
@@ -1013,14 +1045,9 @@ ngx_http_compression_queue(ngx_http_compression_ctx_t *ctx, ngx_chain_t *in)
     size_t        size;
     ngx_buf_t    *b;
     ngx_pool_t   *pool;
-    ngx_chain_t  *cl, **last;
+    ngx_chain_t  *cl;
 
     pool = ctx->request->pool;
-    last = &ctx->in;
-
-    while (*last) {
-        last = &(*last)->next;
-    }
 
     for ( /* void */ ; in; in = in->next) {
         b = in->buf;
@@ -1063,8 +1090,8 @@ ngx_http_compression_queue(ngx_http_compression_ctx_t *ctx, ngx_chain_t *in)
 
         cl->buf = b;
         cl->next = NULL;
-        *last = cl;
-        last = &cl->next;
+        *ctx->last_in = cl;
+        ctx->last_in = &cl->next;
     }
 
     return NGX_OK;
