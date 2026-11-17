@@ -10,6 +10,59 @@ nginx modules for dynamic compression, precompressed files, and response decompr
 | `ngx_http_compression_vary_filter_module` | Merges Vary response header fields. |
 | `ngx_http_compression_normalize_module` | Normalizes the Accept-Encoding request header field. |
 
+## Table of Contents
+
+- [Example](#example)
+- [Installation](#installation)
+  - [Conditional configuration](#conditional-configuration)
+- [Directives](#directives)
+  - [Dynamic compression](#dynamic-compression)
+    - [compression](#compression)
+    - [compression_encodings](#compression_encodings)
+    - [compression_ignore_client_qvalue](#compression_ignore_client_qvalue)
+    - [compression_types](#compression_types)
+    - [compression_min_length](#compression_min_length)
+    - [compression_max_length](#compression_max_length)
+    - [compression_bypass](#compression_bypass)
+    - [compression_buffers](#compression_buffers)
+    - [compression_postpone](#compression_postpone)
+    - [compression_no_buffer](#compression_no_buffer)
+    - [compression_http_version](#compression_http_version)
+    - [compression_proxied](#compression_proxied)
+    - [compression_disable](#compression_disable)
+    - [compression_gzip_level](#compression_gzip_level)
+    - [compression_gzip_window](#compression_gzip_window)
+    - [compression_gzip_hash](#compression_gzip_hash)
+    - [compression_brotli_level](#compression_brotli_level)
+    - [compression_brotli_window](#compression_brotli_window)
+    - [compression_zstd_level](#compression_zstd_level)
+    - [compression_zstd_window](#compression_zstd_window)
+    - [compression_zstd_target_block_size](#compression_zstd_target_block_size)
+    - [compression_deflate_level](#compression_deflate_level)
+    - [compression_deflate_window](#compression_deflate_window)
+    - [compression_deflate_hash](#compression_deflate_hash)
+  - [Static compression](#static-compression)
+    - [compression_static](#compression_static)
+    - [compression_static_encodings](#compression_static_encodings)
+    - [compression_static_ignore_client_qvalue](#compression_static_ignore_client_qvalue)
+  - [Response decompression](#response-decompression)
+    - [decompression](#decompression)
+    - [decompression_force](#decompression_force)
+    - [decompression_encodings](#decompression_encodings)
+    - [decompression_buffers](#decompression_buffers)
+  - [Normalization](#normalization)
+    - [compression_normalize_accept_encoding](#compression_normalize_accept_encoding)
+  - [Vary](#vary)
+    - [compression_vary](#compression_vary)
+- [Variables](#variables)
+  - [$compression_original_accept_encoding](#compression_original_accept_encoding)
+  - [$compression_ratio](#compression_ratio)
+- [Negotiation](#negotiation)
+- [Compatibility](#compatibility)
+- [Testing](#testing)
+- [References](#references)
+- [License](#license)
+
 ## Example
 
 ```nginx
@@ -100,7 +153,9 @@ compression on;
 
 ## Directives
 
-### compression
+### Dynamic compression
+
+#### compression
 
 **Syntax:** `compression on | off;`\
 **Default:** `compression off;`\
@@ -108,7 +163,7 @@ compression on;
 
 Enables or disables compression of responses.
 
-### compression_encodings
+#### compression_encodings
 
 **Syntax:** `compression_encodings encoding ...;`\
 **Default:** `compression_encodings gzip;`\
@@ -118,7 +173,7 @@ Sets the available encodings and their preference order: `gzip`, `br`, `zstd`, a
 
 The `deflate` encoding uses the zlib format.
 
-### compression_ignore_client_qvalue
+#### compression_ignore_client_qvalue
 
 **Syntax:** `compression_ignore_client_qvalue on | off;`\
 **Default:** `compression_ignore_client_qvalue off;`\
@@ -126,7 +181,7 @@ The `deflate` encoding uses the zlib format.
 
 Selects the first accepted encoding in `compression_encodings` without comparing client quality values. Encodings with `q=0` remain excluded.
 
-### compression_types
+#### compression_types
 
 **Syntax:** `compression_types mime-type ...;`\
 **Default:** `compression_types text/html;`\
@@ -134,7 +189,7 @@ Selects the first accepted encoding in `compression_encodings` without comparing
 
 Enables compression of responses for the specified MIME types in addition to `text/html`. The special value `*` matches any MIME type. Responses with the `text/html` type are always compressed.
 
-### compression_min_length
+#### compression_min_length
 
 **Syntax:** `compression_min_length length;`\
 **Default:** `compression_min_length 20;`\
@@ -142,7 +197,7 @@ Enables compression of responses for the specified MIME types in addition to `te
 
 Sets the minimum length of a response that will be compressed. The length is determined only from the `Content-Length` response header field.
 
-### compression_max_length
+#### compression_max_length
 
 **Syntax:** `compression_max_length length;`\
 **Default:** `compression_max_length 0;`\
@@ -150,7 +205,7 @@ Sets the minimum length of a response that will be compressed. The length is det
 
 Sets the maximum length of a response that will be compressed. The length is determined only from the `Content-Length` response header field. The zero value disables the limit.
 
-### compression_bypass
+#### compression_bypass
 
 **Syntax:** `compression_bypass string ...;`\
 **Default:** —\
@@ -158,7 +213,7 @@ Sets the maximum length of a response that will be compressed. The length is det
 
 Skips compression if any argument is nonempty and not equal to `0`. Arguments can contain variables.
 
-### compression_buffers
+#### compression_buffers
 
 **Syntax:** `compression_buffers number size;`\
 **Default:** `compression_buffers 32 4k|16 8k;`\
@@ -166,7 +221,7 @@ Skips compression if any argument is nonempty and not equal to `0`. Arguments ca
 
 Sets the `number` and `size` of buffers used to compress a response. By default, the buffer size is equal to one memory page. This is either 4K or 8K, depending on a platform.
 
-### compression_postpone
+#### compression_postpone
 
 **Syntax:** `compression_postpone size;`\
 **Default:** `compression_postpone 0;`\
@@ -174,7 +229,7 @@ Sets the `number` and `size` of buffers used to compress a response. By default,
 
 Postpones encoder initialization until the specified amount of input has been buffered. A flush or the end of the response starts compression earlier.
 
-### compression_no_buffer
+#### compression_no_buffer
 
 **Syntax:** `compression_no_buffer on | off;`\
 **Default:** `compression_no_buffer off;`\
@@ -182,7 +237,7 @@ Postpones encoder initialization until the specified amount of input has been bu
 
 Passes partially filled output buffers downstream when the currently available input has been consumed. This does not force an encoder flush.
 
-### compression_http_version
+#### compression_http_version
 
 **Syntax:** `compression_http_version 1.0 | 1.1;`\
 **Default:** `compression_http_version 1.1;`\
@@ -190,7 +245,7 @@ Passes partially filled output buffers downstream when the currently available i
 
 Alias of [gzip_http_version](https://nginx.org/en/docs/http/ngx_http_gzip_module.html#gzip_http_version), applied to all supported encodings.
 
-### compression_proxied
+#### compression_proxied
 
 **Syntax:** `compression_proxied off | expired | no-cache | no-store | private | no_last_modified | no_etag | auth | any ...;`\
 **Default:** `compression_proxied off;`\
@@ -198,7 +253,7 @@ Alias of [gzip_http_version](https://nginx.org/en/docs/http/ngx_http_gzip_module
 
 Alias of [gzip_proxied](https://nginx.org/en/docs/http/ngx_http_gzip_module.html#gzip_proxied), applied to all supported encodings.
 
-### compression_disable
+#### compression_disable
 
 **Syntax:** `compression_disable regex ...;`\
 **Default:** —\
@@ -206,7 +261,7 @@ Alias of [gzip_proxied](https://nginx.org/en/docs/http/ngx_http_gzip_module.html
 
 Alias of [gzip_disable](https://nginx.org/en/docs/http/ngx_http_gzip_module.html#gzip_disable), applied to all supported encodings.
 
-### compression_gzip_level
+#### compression_gzip_level
 
 **Syntax:** `compression_gzip_level level;`\
 **Default:** `compression_gzip_level 1;`\
@@ -214,7 +269,7 @@ Alias of [gzip_disable](https://nginx.org/en/docs/http/ngx_http_gzip_module.html
 
 Sets a gzip compression `level` of a response. Acceptable values are in the range from 1 to 9.
 
-### compression_gzip_window
+#### compression_gzip_window
 
 **Syntax:** `compression_gzip_window size;`\
 **Default:** `compression_gzip_window 32k;`\
@@ -222,7 +277,7 @@ Sets a gzip compression `level` of a response. Acceptable values are in the rang
 
 Sets the gzip window size, a power of two from `512` to `32k`.
 
-### compression_gzip_hash
+#### compression_gzip_hash
 
 **Syntax:** `compression_gzip_hash size;`\
 **Default:** `compression_gzip_hash 64k;`\
@@ -230,7 +285,7 @@ Sets the gzip window size, a power of two from `512` to `32k`.
 
 Sets the gzip hash table size, a power of two from `512` to `128k`.
 
-### compression_brotli_level
+#### compression_brotli_level
 
 **Syntax:** `compression_brotli_level level;`\
 **Default:** `compression_brotli_level 1;`\
@@ -238,7 +293,7 @@ Sets the gzip hash table size, a power of two from `512` to `128k`.
 
 Sets a Brotli compression `level` of a response. Acceptable values are in the range from 0 to 11.
 
-### compression_brotli_window
+#### compression_brotli_window
 
 **Syntax:** `compression_brotli_window size;`\
 **Default:** `compression_brotli_window 512k;`\
@@ -246,7 +301,7 @@ Sets a Brotli compression `level` of a response. Acceptable values are in the ra
 
 Sets the Brotli window size, a power of two from `1k` to `16m`.
 
-### compression_zstd_level
+#### compression_zstd_level
 
 **Syntax:** `compression_zstd_level level;`\
 **Default:** `compression_zstd_level 1;`\
@@ -254,7 +309,7 @@ Sets the Brotli window size, a power of two from `1k` to `16m`.
 
 Sets a Zstd compression `level` of a response. Acceptable values are determined by libzstd. Negative values are supported; the zero value is not allowed.
 
-### compression_zstd_window
+#### compression_zstd_window
 
 **Syntax:** `compression_zstd_window size;`\
 **Default:** `compression_zstd_window 512k;`\
@@ -262,7 +317,7 @@ Sets a Zstd compression `level` of a response. Acceptable values are determined 
 
 Sets the Zstd window size, a power of two from `1k` to `8m`.
 
-### compression_zstd_target_block_size
+#### compression_zstd_target_block_size
 
 **Syntax:** `compression_zstd_target_block_size size;`\
 **Default:** `compression_zstd_target_block_size 0;`\
@@ -272,7 +327,7 @@ Sets the target compressed block size. This is an approximate target, independen
 
 Available with libzstd 1.5.6 or later.
 
-### compression_deflate_level
+#### compression_deflate_level
 
 **Syntax:** `compression_deflate_level level;`\
 **Default:** `compression_deflate_level 1;`\
@@ -280,7 +335,7 @@ Available with libzstd 1.5.6 or later.
 
 Sets a deflate compression `level` of a response. Acceptable values are in the range from 1 to 9.
 
-### compression_deflate_window
+#### compression_deflate_window
 
 **Syntax:** `compression_deflate_window size;`\
 **Default:** `compression_deflate_window 32k;`\
@@ -288,7 +343,7 @@ Sets a deflate compression `level` of a response. Acceptable values are in the r
 
 Sets the deflate window size, a power of two from `512` to `32k`.
 
-### compression_deflate_hash
+#### compression_deflate_hash
 
 **Syntax:** `compression_deflate_hash size;`\
 **Default:** `compression_deflate_hash 64k;`\
@@ -296,15 +351,9 @@ Sets the deflate window size, a power of two from `512` to `32k`.
 
 Sets the deflate hash table size, a power of two from `512` to `128k`.
 
-## Negotiation
+### Static compression
 
-The module reads the effective `Accept-Encoding` request header. By default, the highest client quality value wins; equal values use the configured encoding order. An explicit `identity` preference is respected. A wildcard applies only to encodings without an explicit entry.
-
-Missing or empty `Accept-Encoding` selects an uncompressed response. Repeated encodings use the first occurrence; invalid quality values make that entry unavailable. When compression is applicable but neither a configured encoding nor identity is acceptable, the response is `406`.
-
-## Static compression directives
-
-### compression_static
+#### compression_static
 
 **Syntax:** `compression_static on | off | always;`\
 **Default:** `compression_static off;`\
@@ -318,7 +367,7 @@ The files can be compressed using the `gzip`, `brotli`, or `zstd` commands, or a
 
 The file suffixes are `.gz`, `.br`, `.zst`, and `.deflate`.
 
-### compression_static_encodings
+#### compression_static_encodings
 
 **Syntax:** `compression_static_encodings encoding ...;`\
 **Default:** `compression_static_encodings gzip;`\
@@ -326,7 +375,7 @@ The file suffixes are `.gz`, `.br`, `.zst`, and `.deflate`.
 
 Sets the encodings and their preference order. If a file does not exist, the remaining encodings are checked in order of preference. A list at a lower configuration level replaces the inherited list.
 
-### compression_static_ignore_client_qvalue
+#### compression_static_ignore_client_qvalue
 
 **Syntax:** `compression_static_ignore_client_qvalue on | off;`\
 **Default:** `compression_static_ignore_client_qvalue off;`\
@@ -334,9 +383,9 @@ Sets the encodings and their preference order. If a file does not exist, the rem
 
 Selects the first accepted encoding in `compression_static_encodings` without comparing client quality values. Encodings with `q=0` remain excluded.
 
-## Decompression directives
+### Response decompression
 
-### decompression
+#### decompression
 
 **Syntax:** `decompression on | off;`\
 **Default:** `decompression off;`\
@@ -344,7 +393,7 @@ Selects the first accepted encoding in `compression_static_encodings` without co
 
 Enables or disables decompression of compressed responses for clients that lack support for the encoding. If enabled, the following directives are also taken into account when determining if clients support the encoding: [compression_http_version](#compression_http_version), [compression_proxied](#compression_proxied), and [compression_disable](#compression_disable). See also the [compression_vary](#compression_vary) directive.
 
-### decompression_force
+#### decompression_force
 
 **Syntax:** `decompression_force on | off;`\
 **Default:** `decompression_force off;`\
@@ -352,7 +401,7 @@ Enables or disables decompression of compressed responses for clients that lack 
 
 Enables or disables decompression of responses regardless of whether the client supports their encoding.
 
-### decompression_encodings
+#### decompression_encodings
 
 **Syntax:** `decompression_encodings encoding ...;`\
 **Default:** all encodings with an available decoder\
@@ -360,7 +409,7 @@ Enables or disables decompression of responses regardless of whether the client 
 
 Sets the response encodings eligible for decompression. A list at a lower configuration level replaces the inherited list.
 
-### decompression_buffers
+#### decompression_buffers
 
 **Syntax:** `decompression_buffers number size;`\
 **Default:** `decompression_buffers 32 4k|16 8k;`\
@@ -368,9 +417,9 @@ Sets the response encodings eligible for decompression. A list at a lower config
 
 Sets the `number` and `size` of buffers used to decompress a response. By default, the buffer size is equal to one memory page. This is either 4K or 8K, depending on a platform.
 
-## Normalization directives
+### Normalization
 
-### compression_normalize_accept_encoding
+#### compression_normalize_accept_encoding
 
 **Syntax:** `compression_normalize_accept_encoding combination ...;`\
 **Syntax:** `compression_normalize_accept_encoding off;`\
@@ -387,9 +436,9 @@ compression_normalize_accept_encoding gzip,br,zstd gzip,br zstd br gzip;
 
 The `off` parameter disables normalization.
 
-## Vary directives
+### Vary
 
-### compression_vary
+#### compression_vary
 
 **Syntax:** `compression_vary on | off;`\
 **Default:** `compression_vary off;`\
@@ -410,6 +459,12 @@ The original value of the `Accept-Encoding` request header field.
 Original size divided by compressed size, with two decimal places; available after successful compression.
 
 Remove any existing `map` or `var` definition of `$compression_ratio` before enabling this module.
+
+## Negotiation
+
+The module reads the effective `Accept-Encoding` request header. By default, the highest client quality value wins; equal values use the configured encoding order. An explicit `identity` preference is respected. A wildcard applies only to encodings without an explicit entry.
+
+Missing or empty `Accept-Encoding` selects an uncompressed response. Repeated encodings use the first occurrence; invalid quality values make that entry unavailable. When compression is applicable but neither a configured encoding nor identity is acceptable, the response is `406`.
 
 ## Compatibility
 
@@ -439,6 +494,19 @@ Set `TEST_NGINX_DECOMPRESSION_ENCODINGS` separately when decoder availability di
 
 `util/run-tests.sh` builds nginx and runs the suite using sources under `.ci/`. The workflow covers static and dynamic builds, optional expr support, library combinations without the native gzip modules, and sanitizers. Library combinations use a compiler wrapper to make excluded libraries fail the normal configuration and link checks. Sanitizer compiler exclusions are restricted to nginx core's unaligned wire-format operations and zero-length string copies; the compression module is fully instrumented.
 
+## References
+
+- [ngx_http_gzip_module](https://nginx.org/en/docs/http/ngx_http_gzip_module.html)
+- [ngx_http_gzip_static_module](https://nginx.org/en/docs/http/ngx_http_gzip_static_module.html)
+- [ngx_http_gunzip_module](https://nginx.org/en/docs/http/ngx_http_gunzip_module.html)
+- [google/ngx_brotli](https://github.com/google/ngx_brotli)
+- [clyfish/ngx_unbrotli](https://github.com/clyfish/ngx_unbrotli)
+- [tokers/zstd-nginx-module](https://github.com/tokers/zstd-nginx-module)
+- [myguard-labs/nginx-zstd-module](https://github.com/myguard-labs/nginx-zstd-module)
+- [ngx_http_unzstd_filter_module](https://github.com/HanadaLee/ngx_http_unzstd_filter_module)
+- [ngx_http_compression_normalize_module](https://github.com/HanadaLee/ngx_http_compression_normalize_module)
+- [ngx_http_compression_vary_filter_module](https://github.com/HanadaLee/ngx_http_compression_vary_filter_module)
+
 ## License
 
-BSD-2-Clause. See [LICENSE](LICENSE) for the original copyright notices.
+BSD-2-Clause. See [LICENSE](LICENSE).
